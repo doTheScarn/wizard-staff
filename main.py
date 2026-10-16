@@ -1,0 +1,93 @@
+"""Run Wizard Staff on a Raspberry Pi or preview it without hardware."""
+
+import argparse
+import time
+
+from wizard_staff.config import StaffConfig
+from wizard_staff.controller import WizardStaff
+
+
+TOTAL_LEDS = 300
+ORB_LEDS = 36
+LEDS_PER_WRAP = 4
+STEM_LEDS = TOTAL_LEDS - ORB_LEDS
+BASELINE_SHAFT_BRIGHTNESS = 0.2
+BASELINE_ORB_BRIGHTNESS = 0.2
+MAX_BRIGHTNESS = 0.5
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--orb-leds", type=int, default=ORB_LEDS)
+    parser.add_argument("--stem-leds", type=int, default=STEM_LEDS)
+    parser.add_argument("--leds-per-repeat", type=int, default=LEDS_PER_WRAP)
+    parser.add_argument("--turns-per-repeat", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--frame-rate", type=float, default=30)
+    parser.add_argument("--brightness", type=float, default=1.0,
+                        help="Additional hardware output multiplier (default: 1.0).")
+    parser.add_argument("--led-pin", default="D18")
+    parser.add_argument("--pixel-order", default="RGB")
+    parser.add_argument("--color-mapping", choices=("tire_pixel", "standard"),
+                        default="tire_pixel")
+    parser.add_argument("--button-gpio", type=int, default=17)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--seconds", type=float, default=None,
+                        help="Stop after this many seconds (useful for a preview).")
+    parser.add_argument("--effect", choices=("quick", "double_quick", "medium",
+                                              "hold_start", "quick_medium",
+                                              "quick_hold_start"),
+                        help="Start a slot immediately; useful with --dry-run.")
+    return parser.parse_args()
+
+
+def preview(frame, orb_leds):
+    orb = max(frame[:orb_leds], key=lambda pixel: sum(pixel))
+    stem = frame[orb_leds:]
+    glyphs = " .:-=+*#%@"
+    line = "".join(glyphs[min(len(glyphs) - 1, sum(pixel) // 65)] for pixel in stem)
+    return f"orb={orb} stem={line}"
+
+
+def main():
+    args = parse_args()
+    config = StaffConfig(orb_leds=args.orb_leds, stem_leds=args.stem_leds,
+                         leds_per_repeat=args.leds_per_repeat,
+                         turns_per_repeat=args.turns_per_repeat,
+                         frame_rate=args.frame_rate, brightness=args.brightness,
+                         baseline_shaft_brightness=BASELINE_SHAFT_BRIGHTNESS,
+                         baseline_orb_brightness=BASELINE_ORB_BRIGHTNESS,
+                         max_brightness=MAX_BRIGHTNESS,
+                         led_pin=args.led_pin, pixel_order=args.pixel_order,
+                         color_mapping=args.color_mapping, button_gpio=args.button_gpio)
+    staff = WizardStaff(config)
+    hardware = None
+    if not args.dry_run:
+        from wizard_staff.hardware import PiHardware
+        hardware = PiHardware(config, staff.geometry.total_leds)
+
+    start = time.monotonic()
+    if args.effect:
+        staff.trigger(args.effect, start)
+    next_frame = start
+    next_preview = start
+    try:
+        while args.seconds is None or time.monotonic() - start < args.seconds:
+            now = time.monotonic()
+            frame = staff.step(now, hardware.is_pressed() if hardware else False)
+            if hardware:
+                hardware.show(frame)
+            elif now >= next_preview:
+                print(preview(frame, config.orb_leds))
+                next_preview = now + 0.25
+            next_frame += 1 / config.frame_rate
+            time.sleep(max(0, next_frame - time.monotonic()))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if hardware:
+            hardware.close()
+
+
+if __name__ == "__main__":
+    main()
+

@@ -74,7 +74,7 @@ python main.py --dry-run --seconds 5 --effect quick
 python -m unittest discover -s tests -v
 ```
 
-On the Raspberry Pi, install `requirements.txt`, connect the strip data line
+On the Raspberry Pi, connect the strip data line
 to the configured NeoPixel pin (default `D18`), and wire a normally-open
 button from BCM GPIO 17 to ground. The code enables the internal pull-up.
 The LED counts above are set in `main.py`, so no count arguments are required.
@@ -83,9 +83,12 @@ You can still override `--orb-leds`, `--stem-leds`, `--leds-per-repeat`,
 `--color-mapping` for another build.
 
 ```bash
-python -m pip install -r requirements.txt
-sudo python main.py
+sudo /home/pi/miniforge3/envs/tire/bin/python main.py
 ```
+
+This uses the existing `tire` Conda environment even under `sudo`. The button
+adapter uses its installed `RPi.GPIO` package; `board` comes from its installed
+Adafruit Blinka package. For a new environment, install `requirements.txt`.
 
 The defaults match `tire-pixel`: data pin `D18`, NeoPixel `RGB` order, and its
 physical red/green channel swap. Patterns use logical RGB; the output

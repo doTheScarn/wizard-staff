@@ -12,17 +12,20 @@ class PiHardware:
     def __init__(self, config, total_leds):
         import board
         import neopixel
-        from gpiozero import Button
+        import RPi.GPIO as GPIO
 
         pin = getattr(board, config.led_pin)
         order = getattr(neopixel, config.pixel_order)
         self.strip = neopixel.NeoPixel(pin, total_leds, brightness=config.brightness,
                                       auto_write=False, pixel_order=order)
-        self.button = Button(config.button_gpio, pull_up=True, bounce_time=None)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(config.button_gpio, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        self.gpio = GPIO
+        self.button_gpio = config.button_gpio
         self.color_mapping = config.color_mapping
 
     def is_pressed(self):
-        return self.button.is_pressed
+        return self.gpio.input(self.button_gpio) == self.gpio.LOW
 
     def show(self, frame):
         for index, color in enumerate(frame):
@@ -32,6 +35,6 @@ class PiHardware:
     def close(self):
         self.strip.fill((0, 0, 0))
         self.strip.show()
-        self.button.close()
+        self.gpio.cleanup(self.button_gpio)
         self.strip.deinit()
 

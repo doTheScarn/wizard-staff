@@ -13,6 +13,7 @@ class StaffConfig:
     baseline_orb_brightness: float = 0.2
     max_brightness: float = 0.5
     led_pin: str = "D18"
+    data_start: str = "bottom"
     pixel_order: str = "RGB"
     color_mapping: str = "tire_pixel"
     button_gpio: int = 17
@@ -41,4 +42,6 @@ class StaffConfig:
             raise ValueError("invalid press window or base pattern duration")
         if self.color_mapping not in ("tire_pixel", "standard"):
             raise ValueError("color_mapping must be tire_pixel or standard")
+        if self.data_start not in ("top", "bottom"):
+            raise ValueError("data_start must be top or bottom")
 

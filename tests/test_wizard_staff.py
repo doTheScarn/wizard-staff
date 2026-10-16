@@ -8,13 +8,15 @@ from wizard_staff.config import StaffConfig
 from wizard_staff.controller import WizardStaff
 from wizard_staff.effects import StackingDropEffect
 from wizard_staff.geometry import StaffGeometry
-from wizard_staff.hardware import encode_color
+from wizard_staff.hardware import PiHardware, encode_color
 from wizard_staff.vectors import solid, render
 
 
 class WizardStaffTests(unittest.TestCase):
     def test_default_physical_layout(self):
-        geometry = StaffGeometry.from_config(StaffConfig())
+        config = StaffConfig()
+        geometry = StaffGeometry.from_config(config)
+        self.assertEqual(config.data_start, "bottom")
         self.assertEqual((ORB_LEDS, STEM_LEDS, LEDS_PER_WRAP, TOTAL_LEDS),
                          (36, 264, 4, 300))
         self.assertEqual(geometry.total_leds, TOTAL_LEDS)
@@ -55,6 +57,34 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(encode_color((0, 255, 0), "tire_pixel"), (255, 0, 0))
         self.assertEqual(encode_color((0, 0, 255), "tire_pixel"), (0, 0, 255))
         self.assertEqual(encode_color((255, 0, 0), "standard"), (255, 0, 0))
+
+    def test_output_order_keeps_logical_orb_at_top(self):
+        class FakeStrip:
+            def __init__(self):
+                self.pixels = [(0, 0, 0)] * 5
+                self.shows = 0
+
+            def __setitem__(self, index, color):
+                self.pixels[index] = color
+
+            def show(self):
+                self.shows += 1
+
+        frame = [(10, 0, 0), (20, 0, 0), (30, 0, 0),
+                 (40, 0, 0), (50, 0, 0)]
+        for data_start, expected in (("bottom", list(reversed(frame))),
+                                     ("top", frame)):
+            hardware = PiHardware.__new__(PiHardware)
+            hardware.strip = FakeStrip()
+            hardware.total_leds = len(frame)
+            hardware.data_start = data_start
+            hardware.color_mapping = "standard"
+            hardware.show(frame)
+            self.assertEqual(hardware.strip.pixels, expected)
+            self.assertEqual(hardware.strip.shows, 1)
+
+        with self.assertRaises(ValueError):
+            StaffConfig(data_start="side")
 
     def test_button_debounce_single_double_medium_and_hold(self):
         config = StaffConfig()

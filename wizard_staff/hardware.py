@@ -23,12 +23,16 @@ class PiHardware:
         self.gpio = GPIO
         self.button_gpio = config.button_gpio
         self.color_mapping = config.color_mapping
+        self.data_start = config.data_start
+        self.total_leds = total_leds
 
     def is_pressed(self):
         return self.gpio.input(self.button_gpio) == self.gpio.LOW
 
     def show(self, frame):
-        for index, color in enumerate(frame):
+        indices = (range(self.total_leds - 1, -1, -1) if self.data_start == "bottom"
+                   else range(self.total_leds))
+        for index, color in zip(indices, frame):
             self.strip[index] = encode_color(color, self.color_mapping)
         self.strip.show()
 

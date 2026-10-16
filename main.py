@@ -14,6 +14,7 @@ STEM_LEDS = TOTAL_LEDS - ORB_LEDS
 BASELINE_SHAFT_BRIGHTNESS = 0.2
 BASELINE_ORB_BRIGHTNESS = 0.2
 MAX_BRIGHTNESS = 0.5
+DATA_START = "bottom"
 
 
 def parse_args():
@@ -26,11 +27,14 @@ def parse_args():
     parser.add_argument("--brightness", type=float, default=1.0,
                         help="Additional hardware output multiplier (default: 1.0).")
     parser.add_argument("--led-pin", default="D18")
+    parser.add_argument("--data-start", choices=("top", "bottom"), default=DATA_START)
     parser.add_argument("--pixel-order", default="RGB")
     parser.add_argument("--color-mapping", choices=("tire_pixel", "standard"),
                         default="tire_pixel")
     parser.add_argument("--button-gpio", type=int, default=17)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--report-fps", action="store_true",
+                        help="Print measured frame rate and update time every 2 seconds.")
     parser.add_argument("--seconds", type=float, default=None,
                         help="Stop after this many seconds (useful for a preview).")
     parser.add_argument("--effect", choices=("quick", "double_quick", "medium",
@@ -57,7 +61,8 @@ def main():
                          baseline_shaft_brightness=BASELINE_SHAFT_BRIGHTNESS,
                          baseline_orb_brightness=BASELINE_ORB_BRIGHTNESS,
                          max_brightness=MAX_BRIGHTNESS,
-                         led_pin=args.led_pin, pixel_order=args.pixel_order,
+                         led_pin=args.led_pin, data_start=args.data_start,
+                         pixel_order=args.pixel_order,
                          color_mapping=args.color_mapping, button_gpio=args.button_gpio)
     staff = WizardStaff(config)
     hardware = None
@@ -70,15 +75,35 @@ def main():
         staff.trigger(args.effect, start)
     next_frame = start
     next_preview = start
+    report_start = start
+    report_frames = 0
+    report_work_s = 0.0
+    report_max_work_s = 0.0
     try:
         while args.seconds is None or time.monotonic() - start < args.seconds:
             now = time.monotonic()
+            work_started = time.perf_counter() if args.report_fps else None
             frame = staff.step(now, hardware.is_pressed() if hardware else False)
             if hardware:
                 hardware.show(frame)
             elif now >= next_preview:
                 print(preview(frame, config.orb_leds))
                 next_preview = now + 0.25
+            if args.report_fps:
+                finished_at = time.monotonic()
+                work_s = time.perf_counter() - work_started
+                report_frames += 1
+                report_work_s += work_s
+                report_max_work_s = max(report_max_work_s, work_s)
+                report_elapsed = finished_at - report_start
+                if report_elapsed >= 2.0:
+                    print(f"fps={report_frames / report_elapsed:.1f} "
+                          f"update_avg_ms={report_work_s / report_frames * 1000:.2f} "
+                          f"update_max_ms={report_max_work_s * 1000:.2f}", flush=True)
+                    report_start = finished_at
+                    report_frames = 0
+                    report_work_s = 0.0
+                    report_max_work_s = 0.0
             next_frame += 1 / config.frame_rate
             time.sleep(max(0, next_frame - time.monotonic()))
     except KeyboardInterrupt:

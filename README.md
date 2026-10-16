@@ -1,21 +1,24 @@
 # Wizard Staff
 
 A fixed NeoPixel staff built from the light-vector idea in `tire-pixel`. The
-first `orb_leds` pixels form the orb at the top. The next `stem_leds` pixels
+first `orb_leds` logical pixels form the orb at the top. The next `stem_leds` pixels
 follow the helix from top to bottom. Patterns add independent orb, spiral, and
 vertical-channel vectors. There is no IMU or motion compensation.
 
 ## Layout
 
 The current defaults in `main.py` are 300 LEDs total: 36 in the orb and 264 on
-the stem, with 4 LEDs per wrap. Physical indices 36, 40, 44, ... are one
+the stem, with 4 LEDs per wrap. Logical indices 36, 40, 44, ... are one
 vertical channel; 37, 41, 45, ... are the next. This accounts for 66 complete
-four-LED wraps.
+four-LED wraps. The rendering model numbers the orb first and the stem from
+top to bottom. `DATA_START = "bottom"` reverses each frame for a strand whose
+physical LED 0 is at the bottom; the orb occupies physical LEDs 264–299. Set
+`--data-start top` for a strand whose data input is at the orb.
 `turns_per_repeat=1` means those four positions occur in each full turn. If
 the physical wrap repeats only every two turns, set `turns_per_repeat=2` and
 count the LEDs across *both* turns in `leds_per_repeat`.
 
-Each vector specifies a path through physical LED indices, color samples along
+Each vector specifies a path through logical LED indices, color samples along
 that path, and a moving position. The renderer sums every vector and clips RGB
 to 255. A channel path can contain nonadjacent physical indices, so a vertical
 line is one vector even though its LEDs are separated along the string.
@@ -79,12 +82,33 @@ to the configured NeoPixel pin (default `D18`), and wire a normally-open
 button from BCM GPIO 17 to ground. The code enables the internal pull-up.
 The LED counts above are set in `main.py`, so no count arguments are required.
 You can still override `--orb-leds`, `--stem-leds`, `--leds-per-repeat`,
-`--turns-per-repeat`, `--led-pin`, `--button-gpio`, `--pixel-order`, and
+`--turns-per-repeat`, `--led-pin`, `--data-start`, `--button-gpio`, `--pixel-order`, and
 `--color-mapping` for another build.
 
 ```bash
 sudo /home/pi/miniforge3/envs/tire/bin/python main.py
 ```
+
+The normal loop targets 30 frames per second. To see its measured rate and
+average/worst update time every two seconds, run:
+
+```bash
+sudo /home/pi/miniforge3/envs/tire/bin/python main.py --report-fps --seconds 10
+```
+
+To measure the strip without the frame-rate delay or pattern renderer, flash
+the two physical ends with this benchmark. It reports one phase that changes
+only those two pixels, then one that rewrites all 300 pixel values as the normal
+output adapter does. Both phases transmit the full strand on every `show()`.
+
+```bash
+sudo /home/pi/miniforge3/envs/tire/bin/python benchmark_led_refresh.py
+```
+
+If the live loop reports about 30 FPS and update time stays under 33 ms, its
+configured frame rate is the limiting factor. If it stays below 30 FPS, compare
+its update time with the benchmark phases to identify the cost of writing the
+frame and generating the patterns.
 
 This uses the existing `tire` Conda environment even under `sudo`. The button
 adapter uses its installed `RPi.GPIO` package; `board` comes from its installed

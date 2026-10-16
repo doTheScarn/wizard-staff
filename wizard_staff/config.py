@@ -7,7 +7,7 @@ class StaffConfig:
     stem_leds: int = 264
     leds_per_repeat: int = 4
     turns_per_repeat: int = 1
-    frame_rate: float = 30.0
+    frame_rate: float = 60.0
     brightness: float = 1.0
     baseline_shaft_brightness: float = 0.2
     baseline_orb_brightness: float = 0.2

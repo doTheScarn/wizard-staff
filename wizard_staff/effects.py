@@ -9,6 +9,11 @@ from .vectors import LightVector, solid, trail
 
 
 BASE_PATTERNS = ("green_spiral", "green_channels", "rainbow_sparks")
+ORB_PULSE_HZ = 2.0
+SPIRAL_LEDS_PER_SECOND = 24.0
+CHANNEL_ROWS_PER_SECOND = 4.8
+RAINBOW_CYCLE_SECONDS = 6.0
+SPARK_CHANGES_PER_SECOND = 20
 
 
 @dataclass(frozen=True)
@@ -159,7 +164,7 @@ def rainbow(phase, scale=255):
 
 
 def _pulse(t):
-    return 0.12 + 0.58 * (0.5 + 0.5 * math.cos(2 * math.pi * t))
+    return 0.12 + 0.58 * (0.5 + 0.5 * math.cos(2 * math.pi * t * ORB_PULSE_HZ))
 
 
 def base_vectors(name, t, geometry, max_brightness=0.5):
@@ -169,7 +174,7 @@ def base_vectors(name, t, geometry, max_brightness=0.5):
         if name == "green_spiral":
             count = len(geometry.stem)
             for index in range(3):
-                position = (t * 8 + index * count / 3) % (count + 6) - 3
+                position = (t * SPIRAL_LEDS_PER_SECOND + index * count / 3) % (count + 6) - 3
                 depth = max(0.0, min(1.0, position / count))
                 vectors.append(trail(geometry.stem, (40, 170, 100), position,
                                      length=5, brightness=0.8 * (1 - 0.75 * depth)))
@@ -178,16 +183,16 @@ def base_vectors(name, t, geometry, max_brightness=0.5):
             selected = range(0, geometry.leds_per_repeat, stride)
             for index, channel_number in enumerate(list(selected)[:4]):
                 path = geometry.channel(channel_number)
-                position = (t * 1.6 + index * len(path) / 4) % (len(path) + 3) - 1
+                position = (t * CHANNEL_ROWS_PER_SECOND + index * len(path) / 4) % (len(path) + 3) - 1
                 depth = max(0.0, min(1.0, position / len(path)))
                 vectors.append(trail(path, (55, 210, 95), position,
                                      length=3, brightness=0.85 * (1 - 0.65 * depth)))
         return vectors
 
     if name == "rainbow_sparks":
-        vectors.append(solid(geometry.orb, rainbow(t / 12), 0.7))
+        vectors.append(solid(geometry.orb, rainbow(t / RAINBOW_CYCLE_SECONDS), 0.7))
         vectors.append(solid(geometry.stem, (2, 0, 8)))
-        rng = random.Random(int(t * 5))
+        rng = random.Random(int(t * SPARK_CHANGES_PER_SECOND))
         for band in range(4):
             start = band * geometry.stem_leds // 4
             end = (band + 1) * geometry.stem_leds // 4

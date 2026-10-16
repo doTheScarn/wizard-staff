@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument("--stem-leds", type=int, default=STEM_LEDS)
     parser.add_argument("--leds-per-repeat", type=int, default=LEDS_PER_WRAP)
     parser.add_argument("--turns-per-repeat", type=int, choices=(1, 2), default=1)
-    parser.add_argument("--frame-rate", type=float, default=30)
+    parser.add_argument("--frame-rate", type=float, default=60)
     parser.add_argument("--brightness", type=float, default=1.0,
                         help="Additional hardware output multiplier (default: 1.0).")
     parser.add_argument("--led-pin", default="D18")

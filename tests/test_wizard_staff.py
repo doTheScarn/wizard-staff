@@ -6,7 +6,7 @@ from main import (BASELINE_ORB_BRIGHTNESS, BASELINE_SHAFT_BRIGHTNESS,
 from wizard_staff.button import ButtonInterpreter
 from wizard_staff.config import StaffConfig
 from wizard_staff.controller import WizardStaff
-from wizard_staff.effects import StackingDropEffect
+from wizard_staff.effects import StackingDropEffect, base_vectors
 from wizard_staff.geometry import StaffGeometry
 from wizard_staff.hardware import PiHardware, encode_color
 from wizard_staff.vectors import solid, render
@@ -17,6 +17,7 @@ class WizardStaffTests(unittest.TestCase):
         config = StaffConfig()
         geometry = StaffGeometry.from_config(config)
         self.assertEqual(config.data_start, "bottom")
+        self.assertEqual(config.frame_rate, 60.0)
         self.assertEqual((ORB_LEDS, STEM_LEDS, LEDS_PER_WRAP, TOTAL_LEDS),
                          (36, 264, 4, 300))
         self.assertEqual(geometry.total_leds, TOTAL_LEDS)
@@ -85,6 +86,25 @@ class WizardStaffTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             StaffConfig(data_start="side")
+
+    def test_faster_base_pattern_timing(self):
+        geometry = StaffGeometry.from_config(StaffConfig())
+        spiral_start = base_vectors("green_spiral", 0.0, geometry)
+        spiral_half = base_vectors("green_spiral", 0.5, geometry)
+        self.assertAlmostEqual(spiral_half[1].position - spiral_start[1].position, 12.0)
+        self.assertAlmostEqual(spiral_start[0].brightness, 0.7)
+        self.assertAlmostEqual(base_vectors("green_spiral", 0.25, geometry)[0].brightness,
+                               0.12)
+
+        channels_start = base_vectors("green_channels", 0.0, geometry)
+        channels_half = base_vectors("green_channels", 0.5, geometry)
+        self.assertAlmostEqual(channels_half[1].position - channels_start[1].position, 2.4)
+
+        sparks_start = base_vectors("rainbow_sparks", 0.0, geometry)[2:]
+        sparks_before_change = base_vectors("rainbow_sparks", 0.049, geometry)[2:]
+        sparks_after_change = base_vectors("rainbow_sparks", 0.05, geometry)[2:]
+        self.assertEqual(sparks_start, sparks_before_change)
+        self.assertNotEqual(sparks_start, sparks_after_change)
 
     def test_button_debounce_single_double_medium_and_hold(self):
         config = StaffConfig()

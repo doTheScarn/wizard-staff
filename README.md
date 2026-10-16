@@ -37,11 +37,11 @@ turn is handled automatically.
 
 The base patterns cycle automatically every 18 seconds:
 
-1. Green orb pulsing once per second, with fading lights following the helix
+1. Green orb pulsing twice per second, with fading lights following the helix
    downward.
 2. The same orb with lights moving downward along vertical channels.
-3. Slowly changing rainbow orb, dim stem, and four distributed sparks that
-   change several times per second.
+3. Rainbow orb, dim stem, and four distributed sparks that change 20 times
+   per second.
 
 The button has software debounce and a 0.38-second multi-press window:
 
@@ -89,7 +89,7 @@ You can still override `--orb-leds`, `--stem-leds`, `--leds-per-repeat`,
 sudo /home/pi/miniforge3/envs/tire/bin/python main.py
 ```
 
-The normal loop targets 30 frames per second. To see its measured rate and
+The normal loop targets 60 frames per second. To see its measured rate and
 average/worst update time every two seconds, run:
 
 ```bash
@@ -105,8 +105,8 @@ output adapter does. Both phases transmit the full strand on every `show()`.
 sudo /home/pi/miniforge3/envs/tire/bin/python benchmark_led_refresh.py
 ```
 
-If the live loop reports about 30 FPS and update time stays under 33 ms, its
-configured frame rate is the limiting factor. If it stays below 30 FPS, compare
+If the live loop reports about 60 FPS and update time stays under 16.7 ms, its
+configured frame rate is the limiting factor. If it stays below 60 FPS, compare
 its update time with the benchmark phases to identify the cost of writing the
 frame and generating the patterns.
 

@@ -57,11 +57,14 @@ The button has software debounce and a 0.38-second multi-press window:
 | Two quick presses | b | Overlapping groups of three upward spirals; brighter yellow orb flashes blue when each group arrives |
 | Medium press | c | Dimmer channel wave with a six-row dark gap, rising at 56 rows per second and rotating four times per second under a white orb |
 | Long press and hold | d | Slower upward lights and a blue orb while held; release keeps the orb blue until the first burst vector arrives, then bright purple with rapid white flashes |
-| Quick press then medium press | e | Unset; top four stem pixels glow dim red briefly |
+| Quick press then medium press | e | Alternating blue and green pairs of 30-wrap vectors launch from the center toward both ends twice per second; orb stays dark |
 | Quick press then long hold | f | Four-pixel bars drop and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
 
 Timings and slot assignments are in `wizard_staff/config.py` and
-`wizard_staff/controller.py`. Unset slots use the same red indicator.
+`wizard_staff/controller.py`. Unset slots use a brief red indicator.
+Patterns b, c, and e can be extended by pressing and holding while they run.
+Releasing stops new launches and lets active vectors clear. Pattern e normally
+launches for three seconds.
 Quick presses are recognized after the multi-press window closes. A hold
 starts its effect as soon as the long-press threshold is crossed.
 The quick-then-hold slot drops eight bars per second (two per second in each of

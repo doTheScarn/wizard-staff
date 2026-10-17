@@ -24,6 +24,9 @@ BOUNCE_PREFLASH_SECONDS = 0.1
 STACK_FLASH_SEQUENCE_SECONDS = 0.36
 STACK_WHITE_HOLD_SECONDS = 0.4
 STACK_FADE_SECONDS = 0.15
+OPPOSED_PAIR_WRAPS = 30
+OPPOSED_PAIR_INTERVAL_SECONDS = 0.5
+OPPOSED_PAIR_LAUNCH_SECONDS = 3.0
 
 
 @dataclass(frozen=True)
@@ -201,6 +204,59 @@ def _launch_accent(t, speeds_and_offsets):
                (ORB_ACCENT_SECONDS / 2))
 
 
+def opposed_pair_clear_time(geometry):
+    """Time from one launch until both 30-wrap vectors clear the stem."""
+    length = min(round(OPPOSED_PAIR_WRAPS * geometry.leds_per_repeat /
+                       geometry.turns_per_repeat), len(geometry.stem))
+    to_end = (len(geometry.stem) - 1) / 2
+    half_gone_distance = to_end + length / 2
+    final_speed = half_gone_distance / OPPOSED_PAIR_INTERVAL_SECONDS * 0.9
+    return (OPPOSED_PAIR_INTERVAL_SECONDS +
+            (to_end + length - half_gone_distance) / final_speed)
+
+
+def opposed_pair_vectors(elapsed, geometry, peak_brightness=1.0,
+                         launch_until=None):
+    """Launch blue and green pairs from the center toward opposite ends."""
+    stem = geometry.stem
+    length = min(round(OPPOSED_PAIR_WRAPS * geometry.leds_per_repeat /
+                       geometry.turns_per_repeat), len(stem))
+    center = (len(stem) - 1) / 2
+    to_end = max(center, len(stem) - 1 - center)
+    half_gone_distance = to_end + length / 2
+    interval = OPPOSED_PAIR_INTERVAL_SECONDS
+    average_speed = half_gone_distance / interval
+    initial_speed = average_speed * 1.1
+    final_speed = average_speed * 0.9
+    deceleration = (initial_speed - final_speed) / interval
+    fully_gone_at = interval + (to_end + length - half_gone_distance) / final_speed
+    newest = int(elapsed // interval)
+    if launch_until is not None:
+        newest = min(newest, math.ceil(launch_until / interval) - 1)
+    oldest = max(0, int((elapsed - fully_gone_at) // interval))
+    vectors = []
+    for pair in range(oldest, newest + 1):
+        age = elapsed - pair * interval
+        if age < 0 or age >= fully_gone_at:
+            continue
+        if age <= interval:
+            distance = initial_speed * age - 0.5 * deceleration * age * age
+        else:
+            distance = half_gone_distance + final_speed * (age - interval)
+        color = (0, 0, 255) if pair % 2 == 0 else (0, 255, 0)
+        tail_length = min(length, int(distance) + 1)
+        for direction in (-1, 1):
+            samples = tuple(
+                (-direction * offset,
+                 tuple(round(channel * (1 - offset / max(1, length - 1)))
+                       for channel in color))
+                for offset in range(tail_length))
+            vectors.append(LightVector(stem, samples,
+                                       center + direction * distance,
+                                       brightness_override=peak_brightness))
+    return vectors
+
+
 def base_vectors(name, t, geometry, max_brightness=0.5):
     vectors = []
     if name in ("green_spiral", "green_channels"):
@@ -283,7 +339,7 @@ def base_vectors(name, t, geometry, max_brightness=0.5):
 
 
 def manual_vectors(name, elapsed, geometry, charge_time=0.0,
-                   max_brightness=0.5):
+                   max_brightness=0.5, continuation=False, stop_at=None):
     """Return (vectors, finished) for a finite triggered effect."""
     stem = geometry.stem
     if name == "descent_fill":
@@ -310,11 +366,19 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
     if name == "upward_spirals":
         group_interval = 0.65
         rise_speed = (len(stem) + 6) / 0.9
-        last_arrival = 2 * group_interval + (len(stem) * 1.2 + 6) / rise_speed
-        if elapsed >= last_arrival + 0.12:
+        group_lifetime = (len(stem) * 1.2 + 6) / rise_speed + 0.12
+        last_group = int(elapsed // group_interval)
+        if stop_at is not None:
+            last_group = min(last_group, math.ceil(stop_at / group_interval) - 1)
+        elif not continuation:
+            last_group = min(last_group, 2)
+        if (last_group < 0 or
+                ((stop_at is not None or not continuation) and
+                 elapsed >= last_group * group_interval + group_lifetime)):
             return [], True
         vectors = [solid(geometry.orb, (170, 125, 10), 0.85)]
-        for group in range(3):
+        first_group = max(0, int((elapsed - group_lifetime) // group_interval))
+        for group in range(first_group, last_group + 1):
             started = group * group_interval
             if elapsed < started:
                 continue
@@ -331,11 +395,14 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
         return vectors, False
 
     if name == "channel_wave":
-        if elapsed >= 3.0:
+        channels = geometry.channels
+        clear_s = max(len(path) for path in channels) / CHANNEL_WAVE_ROWS_PER_SECOND
+        if stop_at is not None and elapsed >= stop_at + clear_s:
+            return [], True
+        if stop_at is None and not continuation and elapsed >= 3.0:
             return [], True
         vectors = [solid(geometry.orb, (255, 255, 255), 0.8,
                          brightness_override=max_brightness)]
-        channels = geometry.channels
         rotation = int(elapsed * CHANNEL_ROTATIONS_PER_SECOND) % len(channels)
         for source in range(len(channels)):
             path = channels[(source + rotation) % len(channels)]
@@ -343,15 +410,29 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                 2 * math.pi * (elapsed * 2.5 - source / len(channels))))
             color = rainbow(source / len(channels))
             samples = []
+            last_active_row = (len(path) - 1 -
+                               CHANNEL_WAVE_ROWS_PER_SECOND * (elapsed - stop_at)
+                               if stop_at is not None else len(path) - 1)
             for row in range(len(path)):
+                if row > last_active_row:
+                    continue
                 phase = (row + elapsed * CHANNEL_WAVE_ROWS_PER_SECOND) % CHANNEL_WAVE_PERIOD_ROWS
                 if phase < CHANNEL_WAVE_DARK_ROWS:
                     continue
                 ramp = 1.0 - (phase - CHANNEL_WAVE_DARK_ROWS) / (
                     CHANNEL_WAVE_PERIOD_ROWS - CHANNEL_WAVE_DARK_ROWS)
                 samples.append((row, tuple(round(c * ramp) for c in color)))
-            vectors.append(LightVector(path, tuple(samples), brightness=0.5 * pulse))
+            vectors.append(LightVector(path, tuple(samples),
+                                       brightness=0.5 * pulse))
         return vectors, False
+
+    if name == "opposed_pairs":
+        launch_until = (stop_at if stop_at is not None else
+                        None if continuation else OPPOSED_PAIR_LAUNCH_SECONDS)
+        vectors = opposed_pair_vectors(elapsed, geometry, max_brightness,
+                                       launch_until=launch_until)
+        return vectors, (launch_until is not None and not vectors and
+                         elapsed >= launch_until)
 
     if name == "charge":
         speed = 0.3 + min(elapsed, 8.0) * 0.125

@@ -1,5 +1,7 @@
 """In-place terminal status for the virtual button cycle."""
 
+from .effects import OPPOSED_PAIR_LAUNCH_SECONDS, opposed_pair_clear_time
+
 PATTERN_ROWS = (
     ("a", "a", "Descent fill"),
     ("base_a", "1", "Green spiral"),
@@ -9,7 +11,7 @@ PATTERN_ROWS = (
     ("base_c", "3", "Bouncing vectors"),
     ("d", "d", "Charge / release burst"),
     ("base_d", "1", "Green spiral"),
-    ("e", "e", "Unset indicator"),
+    ("e", "e", "Opposed pairs"),
     ("base_e", "2", "Green channels"),
     ("f", "f", "Stacking drops / unload"),
     ("base_f", "3", "Bouncing vectors"),
@@ -27,6 +29,7 @@ EFFECT_ROWS = {
     "channel_wave": "c",
     "charge": "d",
     "release_burst": "d",
+    "opposed_pairs": "e",
     "unset": "e",
     "stack_drop": "f",
     "stack_unload": "f",
@@ -67,6 +70,9 @@ def status_snapshot(staff, player, now):
             rise_speed = (stem + 6) / 0.9
             duration = 1.3 + (stem * 1.2 + 6) / rise_speed + 0.12
             remaining = staff.effect_started_at + duration - now
+        elif effect == "opposed_pairs":
+            remaining = (staff.effect_started_at + OPPOSED_PAIR_LAUNCH_SECONDS - 0.5 +
+                         opposed_pair_clear_time(staff.geometry) - now)
         else:
             remaining = staff.effect_started_at + EFFECT_LENGTHS[effect] - now
         key = EFFECT_ROWS[effect]

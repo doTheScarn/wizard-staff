@@ -8,7 +8,7 @@ VIRTUAL_GESTURES = (
     ("b", "two quick presses"),
     ("c", "medium press"),
     ("d", "long hold"),
-    ("e", "quick press, then medium press (unset)"),
+    ("e", "quick press, then medium press (opposed pairs)"),
     ("f", "quick press, then long hold"),
 )
 LABELS = dict(VIRTUAL_GESTURES)

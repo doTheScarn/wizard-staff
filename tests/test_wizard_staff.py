@@ -16,7 +16,8 @@ from wizard_staff.cycle_status import (CycleStatusDisplay, PATTERN_ROWS,
 from wizard_staff.effects import (BASE_PATTERNS, BOUNCE_LEDS_PER_SECOND,
                                   BOUNCE_PREFLASH_SECONDS,
                                   StackingDropEffect, base_vectors,
-                                  manual_vectors)
+                                  manual_vectors, opposed_pair_vectors,
+                                  opposed_pair_clear_time)
 from wizard_staff.geometry import StaffGeometry
 from wizard_staff.hardware import PiHardware, encode_color
 from wizard_staff.vectors import solid, render
@@ -276,7 +277,7 @@ class WizardStaffTests(unittest.TestCase):
         sample(4.00, False)
         self.assertEqual(sample(4.04, False), ["hold_release"])
 
-    def test_mixed_gesture_and_unset_indicator(self):
+    def test_mixed_gesture_triggers_opposed_pairs(self):
         button = ButtonInterpreter(StaffConfig())
         button.update(True, 0.0)
         button.update(True, 0.04)
@@ -293,10 +294,73 @@ class WizardStaffTests(unittest.TestCase):
         staff.trigger("quick_medium", 1.0)
         frame = staff.step(1.1)
         self.assertEqual(frame[:2], [(0, 0, 0)] * 2)
-        self.assertEqual([i for i, pixel in enumerate(frame) if pixel != (0, 0, 0)],
-                         [2, 3, 4, 5])
-        staff.step(1.5)
+        self.assertEqual(staff.effect, "opposed_pairs")
+        self.assertTrue(any(pixel != (0, 0, 0) for pixel in frame[2:]))
+        staff.step(4.5)
         self.assertIsNone(staff.effect)
+
+    def test_opposed_pairs_launch_and_clear(self):
+        geometry = StaffGeometry.from_config(StaffConfig())
+        initial = opposed_pair_vectors(0.0, geometry, MAX_BRIGHTNESS)
+        self.assertEqual(len(initial), 2)
+        self.assertEqual(initial[0].position, initial[1].position)
+        self.assertEqual(len(initial[0].samples), 1)
+        self.assertEqual(initial[0].brightness_override, MAX_BRIGHTNESS)
+        self.assertEqual(initial[0].samples[0][1], (0, 0, 255))
+        first = opposed_pair_vectors(0.49, geometry, MAX_BRIGHTNESS)
+        self.assertEqual(len(first), 2)
+        self.assertEqual(len(first[0].samples), 120)
+        self.assertLess(first[0].position, 0)
+        self.assertGreater(first[1].position, len(geometry.stem) - 1)
+        second = opposed_pair_vectors(0.5, geometry, MAX_BRIGHTNESS)
+        self.assertEqual(len(second), 4)
+        self.assertEqual(second[2].samples[0][1], (0, 255, 0))
+        self.assertLess(second[0].samples[-1][1][2],
+                        second[0].samples[0][1][2])
+        self.assertLess(opposed_pair_clear_time(geometry), 0.8)
+        active, finished = manual_vectors("opposed_pairs", 3.05, geometry)
+        self.assertTrue(active)
+        self.assertFalse(finished)
+        cleared, finished = manual_vectors("opposed_pairs", 3.5, geometry)
+        self.assertEqual(cleared, [])
+        self.assertTrue(finished)
+
+    def test_hold_extends_b_c_and_e_then_clears(self):
+        for slot, effect in (("double_quick", "upward_spirals"),
+                             ("medium", "channel_wave"),
+                             ("quick_medium", "opposed_pairs")):
+            with self.subTest(effect=effect):
+                staff = WizardStaff(StaffConfig())
+                staff.step(0.0)
+                staff.trigger(slot, 0.0)
+                staff.step(2.0, True)
+                staff.step(2.04, True)
+                staff.step(3.0, True)
+                self.assertEqual(staff.effect, effect)
+                staff.step(4.5, True)
+                self.assertEqual(staff.effect, effect)
+                staff.step(5.1, False)
+                staff.step(5.14, False)
+                self.assertEqual(staff.effect, effect)
+                self.assertAlmostEqual(staff.extension_stop_at, 5.14)
+                staff.step(6.5, False)
+                self.assertIsNone(staff.effect)
+
+    def test_release_stops_new_pairs_and_wave_clears_upward(self):
+        geometry = StaffGeometry.from_config(StaffConfig())
+        pairs, _ = manual_vectors("opposed_pairs", 4.0, geometry,
+                                  continuation=True, stop_at=3.1)
+        self.assertEqual(len(pairs), 0)  # Last launch was at 3.0.
+        wave_at_release, _ = manual_vectors("channel_wave", 3.1, geometry,
+                                             continuation=True, stop_at=3.1)
+        wave_later, _ = manual_vectors("channel_wave", 3.6, geometry,
+                                       continuation=True, stop_at=3.1)
+        self.assertGreater(sum(len(v.samples) for v in wave_at_release[1:]),
+                           sum(len(v.samples) for v in wave_later[1:]))
+        self.assertTrue(manual_vectors("channel_wave", 4.5, geometry,
+                                       continuation=True, stop_at=3.1)[1])
+        self.assertTrue(manual_vectors("descent_fill", 4.0, geometry,
+                                       continuation=True)[1])
 
     def test_quick_then_hold_is_distinct_from_plain_hold(self):
         button = ButtonInterpreter(StaffConfig())
@@ -459,7 +523,7 @@ class WizardStaffTests(unittest.TestCase):
                           "base_d", "base_e", "base_f"])
         self.assertEqual([effect for effect, _ in effects[:8]],
                          ["descent_fill", "upward_spirals", "channel_wave",
-                          "charge", "release_burst", "unset", "stack_drop",
+                          "charge", "release_burst", "opposed_pairs", "stack_drop",
                           "stack_unload"])
         for index, (base_start, base_end) in enumerate(base_gaps[:5]):
             self.assertAlmostEqual(base_end - base_start, 5.0)

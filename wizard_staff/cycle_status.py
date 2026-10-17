@@ -1,6 +1,13 @@
 """In-place terminal status for the virtual button cycle."""
 
-from .effects import OPPOSED_PAIR_LAUNCH_SECONDS, opposed_pair_clear_time
+from .effects import (
+    CHANNEL_WAVE_TOTAL_SECONDS,
+    DESCENT_TOTAL_SECONDS,
+    RELEASE_BURST_SECONDS,
+    UNSET_INDICATOR_SECONDS,
+    opposed_pair_effect_duration,
+    upward_spiral_effect_duration,
+)
 
 PATTERN_ROWS = (
     ("a", "a", "Descent fill"),
@@ -18,10 +25,10 @@ PATTERN_ROWS = (
 )
 PATTERN_NAMES = {key: name for key, _, name in PATTERN_ROWS}
 EFFECT_LENGTHS = {
-    "descent_fill": 3.5,
-    "channel_wave": 3.0,
-    "release_burst": 1.5,
-    "unset": 0.45,
+    "descent_fill": DESCENT_TOTAL_SECONDS,
+    "channel_wave": CHANNEL_WAVE_TOTAL_SECONDS,
+    "release_burst": RELEASE_BURST_SECONDS,
+    "unset": UNSET_INDICATOR_SECONDS,
 }
 EFFECT_ROWS = {
     "descent_fill": "a",
@@ -66,13 +73,11 @@ def status_snapshot(staff, player, now):
             remaining = (staff.effect_started_at +
                          staff.stack_effect.unload_finish_at - now)
         elif effect == "upward_spirals":
-            stem = len(staff.geometry.stem)
-            rise_speed = (stem + 6) / 0.9
-            duration = 1.3 + (stem * 1.2 + 6) / rise_speed + 0.12
+            duration = upward_spiral_effect_duration(len(staff.geometry.stem))
             remaining = staff.effect_started_at + duration - now
         elif effect == "opposed_pairs":
-            remaining = (staff.effect_started_at + OPPOSED_PAIR_LAUNCH_SECONDS - 0.5 +
-                         opposed_pair_clear_time(staff.geometry) - now)
+            remaining = (staff.effect_started_at +
+                         opposed_pair_effect_duration(staff.geometry) - now)
         else:
             remaining = staff.effect_started_at + EFFECT_LENGTHS[effect] - now
         key = EFFECT_ROWS[effect]

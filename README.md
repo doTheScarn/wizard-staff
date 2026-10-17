@@ -60,12 +60,33 @@ The button has software debounce and a 0.38-second multi-press window:
 | Quick press then medium press | e | Alternating blue and green pairs of 30-wrap vectors launch from the center toward both ends twice per second; orb stays dark |
 | Quick press then long hold | f | Four-pixel bars drop and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
 
+The button interpreter also defines the following short/medium sequences. The
+three-press sequences are currently unassigned and show the unset indicator:
+
+| Sequence | Assignment |
+| --- | --- |
+| One short | Descent fill |
+| One medium | Channel wave |
+| Two shorts | Upward spirals |
+| Short, then medium | Opposed pairs |
+| Medium, then short | Unassigned |
+| Two mediums | Unassigned |
+| Short, short, short | Unassigned |
+| Short, short, medium | Unassigned |
+| Short, medium, short | Unassigned |
+| Short, medium, medium | Unassigned |
+| Medium, short, short | Unassigned |
+| Medium, short, medium | Unassigned |
+| Medium, medium, short | Unassigned |
+| Medium, medium, medium | Unassigned |
+
 Timings and slot assignments are in `wizard_staff/config.py` and
 `wizard_staff/controller.py`. Unset slots use a brief red indicator.
 Patterns b, c, and e can be extended by pressing and holding while they run.
 Releasing stops new launches and lets active vectors clear. Pattern e normally
 launches for three seconds.
-Quick presses are recognized after the multi-press window closes. A hold
+One- and two-press short/medium patterns are recognized after the multi-press
+window closes; three-press patterns are recognized on the third release. A hold
 starts its effect as soon as the long-press threshold is crossed.
 The quick-then-hold slot drops eight bars per second (two per second in each of
 the default four channels) at 100 vertical pixels per second. Each channel

@@ -27,6 +27,14 @@ STACK_FADE_SECONDS = 0.15
 OPPOSED_PAIR_WRAPS = 30
 OPPOSED_PAIR_INTERVAL_SECONDS = 0.5
 OPPOSED_PAIR_LAUNCH_SECONDS = 3.0
+DESCENT_FALL_SECONDS = 1.0
+DESCENT_FILL_SECONDS = 1.5
+DESCENT_HOLD_SECONDS = 1.0
+DESCENT_TOTAL_SECONDS = (DESCENT_FALL_SECONDS + DESCENT_FILL_SECONDS +
+                        DESCENT_HOLD_SECONDS)
+CHANNEL_WAVE_TOTAL_SECONDS = 3.0
+RELEASE_BURST_SECONDS = 1.5
+UNSET_INDICATOR_SECONDS = 0.45
 
 
 @dataclass(frozen=True)
@@ -215,6 +223,26 @@ def opposed_pair_clear_time(geometry):
             (to_end + length - half_gone_distance) / final_speed)
 
 
+def opposed_pair_effect_duration(geometry):
+    """Return the time from first launch until the final pair clears."""
+    last_launch_at = OPPOSED_PAIR_LAUNCH_SECONDS - OPPOSED_PAIR_INTERVAL_SECONDS
+    return last_launch_at + opposed_pair_clear_time(geometry)
+
+
+def upward_spiral_timing(stem_length):
+    """Return (group interval, rise speed, group lifetime) for spiral bursts."""
+    group_interval = 0.65
+    rise_speed = (stem_length + 6) / 0.9
+    group_lifetime = (stem_length * 1.2 + 6) / rise_speed + 0.12
+    return group_interval, rise_speed, group_lifetime
+
+
+def upward_spiral_effect_duration(stem_length):
+    """Return the duration of the default three upward spiral groups."""
+    group_interval, _, group_lifetime = upward_spiral_timing(stem_length)
+    return 2 * group_interval + group_lifetime
+
+
 def opposed_pair_vectors(elapsed, geometry, peak_brightness=1.0,
                          launch_until=None):
     """Launch blue and green pairs from the center toward opposite ends."""
@@ -343,8 +371,8 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
     """Return (vectors, finished) for a finite triggered effect."""
     stem = geometry.stem
     if name == "descent_fill":
-        fall_s = 1.0
-        fill_s = 1.5
+        fall_s = DESCENT_FALL_SECONDS
+        fill_s = DESCENT_FILL_SECONDS
         if elapsed < fall_s:
             position = -1 + elapsed / fall_s * (len(stem) + 2)
             return [trail(stem, (20, 200, 255), position, length=6)], False
@@ -356,17 +384,15 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
             vectors.append(trail(stem, (20, 200, 255), head,
                                  length=6, direction=-1))
             return vectors, False
-        if elapsed < 3.5:
-            color = rainbow(math.floor((elapsed - 2.5) * 9) / 9)
+        if elapsed < DESCENT_TOTAL_SECONDS:
+            color = rainbow(math.floor((elapsed - fall_s - fill_s) * 9) / 9)
             return [solid(stem, (255, 0, 0), 0.4),
                     solid(geometry.orb, color, 0.85,
                           brightness_override=max_brightness)], False
         return [], True
 
     if name == "upward_spirals":
-        group_interval = 0.65
-        rise_speed = (len(stem) + 6) / 0.9
-        group_lifetime = (len(stem) * 1.2 + 6) / rise_speed + 0.12
+        group_interval, rise_speed, group_lifetime = upward_spiral_timing(len(stem))
         last_group = int(elapsed // group_interval)
         if stop_at is not None:
             last_group = min(last_group, math.ceil(stop_at / group_interval) - 1)
@@ -399,7 +425,8 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
         clear_s = max(len(path) for path in channels) / CHANNEL_WAVE_ROWS_PER_SECOND
         if stop_at is not None and elapsed >= stop_at + clear_s:
             return [], True
-        if stop_at is None and not continuation and elapsed >= 3.0:
+        if (stop_at is None and not continuation and
+                elapsed >= CHANNEL_WAVE_TOTAL_SECONDS):
             return [], True
         vectors = [solid(geometry.orb, (255, 255, 255), 0.8,
                          brightness_override=max_brightness)]
@@ -445,7 +472,7 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
         return vectors, False
 
     if name == "release_burst":
-        if elapsed >= 1.5:
+        if elapsed >= RELEASE_BURST_SECONDS:
             return [], True
         arrival = (len(stem) - 1) * 0.75 / len(stem)
         blue_level = min(0.9, 0.35 + charge_time * 0.07)
@@ -469,7 +496,7 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
         return vectors, False
 
     if name == "unset":
-        if elapsed >= 0.45:
+        if elapsed >= UNSET_INDICATOR_SECONDS:
             return [], True
         return [solid(geometry.unset_indicator, (70, 0, 0), 0.35)], False
 

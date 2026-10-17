@@ -10,7 +10,11 @@ VIRTUAL_GESTURES = (
     ("d", "long hold"),
     ("e", "quick press, then medium press (opposed pairs)"),
     ("f", "quick press, then long hold"),
+    ("g", "three quick presses (interactive red shots)"),
+    ("s", "interactive red shot"),
+    ("x", "hold to exit interactive shots"),
 )
+CYCLE_GESTURES = VIRTUAL_GESTURES[:7]
 LABELS = dict(VIRTUAL_GESTURES)
 HOLD_EFFECT_SECONDS = 5.0
 BASE_INTERVAL_SECONDS = 5.0
@@ -36,6 +40,8 @@ class VirtualButtonPlayer:
         self.base_after_key = None
         self.base_selection = None
         self.announcements = []
+        self.interactive_cycle_started_at = None
+        self.interactive_cycle_exiting = False
 
     def enqueue(self, text):
         key = text.strip().lower()
@@ -51,6 +57,7 @@ class VirtualButtonPlayer:
         gap = (config.debounce_s + config.multi_press_s) / 2
         medium = (config.quick_press_max_s + config.long_press_s) / 2
         hold = config.long_press_s + HOLD_EFFECT_SECONDS + config.debounce_s
+        exit_hold = config.long_press_s + config.debounce_s
         if key == "a":
             return ((0.0, quick),)
         if key == "b":
@@ -61,6 +68,13 @@ class VirtualButtonPlayer:
             return ((0.0, hold),)
         if key == "e":
             return ((0.0, quick), (quick + gap, quick + gap + medium))
+        if key == "g":
+            return tuple((index * (quick + gap),
+                          index * (quick + gap) + quick) for index in range(3))
+        if key == "s":
+            return ((0.0, quick),)
+        if key == "x":
+            return ((0.0, exit_hold),)
         return ((0.0, quick), (quick + gap, quick + gap + hold))
 
     def _start(self, key, now):
@@ -75,31 +89,64 @@ class VirtualButtonPlayer:
                            self.config.debounce_s + 0.25)
         self.announcements.append(f"Virtual {key}: {LABELS[key]}")
 
-    def tick(self, now, effect_active=False):
+    def tick(self, now, effect_active=False, interactive=False):
         """Return the raw button state to pass to WizardStaff.step()."""
         self.announcements = []
         self.base_selection = None
+        if (self.mode == "cycle" and
+                (self.interactive_cycle_exiting or
+                 self.interactive_cycle_started_at is not None) and
+                not interactive):
+            self.interactive_cycle_started_at = None
+            self.interactive_cycle_exiting = False
+            self.base_until = now + BASE_INTERVAL_SECONDS
+            self.base_after_key = "g"
+            self.base_number = 1
+            self.base_selection = 1
+            self.announcements.append("Base pattern 1 for 5 seconds")
         if self.current_key is not None and effect_active:
             self.effect_seen = True
         if (self.current_key is not None and
                 self.effect_seen and now - self.started_at >= self.script_end and
-                not effect_active):
+                (not effect_active or
+                 (interactive and self.current_key in ("g", "s")))):
+            finished_key = self.current_key
             self.current_key = None
-            if self.mode == "cycle":
+            if self.mode == "cycle" and interactive and finished_key == "g":
+                self.interactive_cycle_started_at = now
+                self.announcements.append("Interactive shots: three taps, then hold to exit")
+            elif self.mode == "cycle":
                 self.base_until = now + BASE_INTERVAL_SECONDS
-                self.base_after_key = VIRTUAL_GESTURES[
-                    (self.next_cycle_index - 1) % len(VIRTUAL_GESTURES)][0]
-                self.base_number = ((self.next_cycle_index - 1) % 3) + 1
+                self.base_after_key = finished_key
+                self.base_number = (1 if finished_key == "g" else
+                                    ((self.next_cycle_index - 1) % 3) + 1)
                 self.base_selection = self.base_number
                 self.announcements.append(
                     f"Base pattern {self.base_number} for 5 seconds")
+        if (self.mode == "cycle" and interactive and
+                self.interactive_cycle_started_at is not None):
+            elapsed = now - self.interactive_cycle_started_at
+            quick = self.config.quick_press_max_s - (
+                self.config.quick_press_max_s - self.config.debounce_s) / 4
+            intervals = ((0.25, 0.25 + quick), (1.15, 1.15 + quick),
+                         (2.5, 2.5 + quick), (3.9, 3.9 +
+                          self.config.long_press_s + self.config.debounce_s))
+            if elapsed >= intervals[-1][1]:
+                self.interactive_cycle_started_at = None
+                self.interactive_cycle_exiting = True
+                return False
+            else:
+                return any(start <= elapsed < end for start, end in intervals)
 
-        if self.current_key is None and not effect_active:
+        if (self.current_key is None and
+                (not effect_active or interactive) and
+                self.interactive_cycle_started_at is None and
+                not self.interactive_cycle_exiting):
             if self.mode == "cycle":
                 if self.base_until is None or now >= self.base_until:
-                    key = VIRTUAL_GESTURES[self.next_cycle_index][0]
+                    key = CYCLE_GESTURES[self.next_cycle_index][0]
                     self.next_cycle_index = ((self.next_cycle_index + 1) %
-                                             len(VIRTUAL_GESTURES))
+                                             len(CYCLE_GESTURES))
                     self._start(key, now)
             elif self.pending:
                 key = self.pending.popleft()

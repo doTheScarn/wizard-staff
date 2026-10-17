@@ -5,7 +5,9 @@ from .effects import (
     DESCENT_TOTAL_SECONDS,
     RELEASE_BURST_SECONDS,
     UNSET_INDICATOR_SECONDS,
+    descent_fill_duration,
     opposed_pair_effect_duration,
+    release_burst_duration,
     upward_spiral_effect_duration,
 )
 
@@ -22,6 +24,8 @@ PATTERN_ROWS = (
     ("base_e", "2", "Green channels"),
     ("f", "f", "Stacking drops / unload"),
     ("base_f", "3", "Bouncing vectors"),
+    ("g", "g", "Interactive red shots"),
+    ("base_g", "1", "Green spiral"),
 )
 PATTERN_NAMES = {key: name for key, _, name in PATTERN_ROWS}
 EFFECT_LENGTHS = {
@@ -40,6 +44,7 @@ EFFECT_ROWS = {
     "unset": "e",
     "stack_drop": "f",
     "stack_unload": "f",
+    "interactive_red_shots": "g",
 }
 
 
@@ -73,11 +78,23 @@ def status_snapshot(staff, player, now):
             remaining = (staff.effect_started_at +
                          staff.stack_effect.unload_finish_at - now)
         elif effect == "upward_spirals":
-            duration = upward_spiral_effect_duration(len(staff.geometry.stem))
+            duration = upward_spiral_effect_duration(
+                len(staff.geometry.stem), staff.geometry, staff.effect_options)
             remaining = staff.effect_started_at + duration - now
         elif effect == "opposed_pairs":
             remaining = (staff.effect_started_at +
-                         opposed_pair_effect_duration(staff.geometry) - now)
+                         opposed_pair_effect_duration(staff.geometry,
+                                                      staff.effect_options) - now)
+        elif effect == "interactive_red_shots":
+            remaining = None
+        elif effect == "descent_fill":
+            remaining = (staff.effect_started_at +
+                         descent_fill_duration(staff.geometry,
+                                               staff.effect_options) - now)
+        elif effect == "release_burst":
+            remaining = (staff.effect_started_at +
+                         release_burst_duration(staff.geometry,
+                                                staff.effect_options) - now)
         else:
             remaining = staff.effect_started_at + EFFECT_LENGTHS[effect] - now
         key = EFFECT_ROWS[effect]
@@ -91,7 +108,7 @@ def status_snapshot(staff, player, now):
         else:
             key = "a"
             remaining = 0.0
-    return key, int(max(0.0, remaining) + 0.5)
+    return key, None if remaining is None else int(max(0.0, remaining) + 0.5)
 
 
 def format_status(staff, player, now, report_text=None):
@@ -102,7 +119,9 @@ def format_status(staff, player, now, report_text=None):
     lines = [f"Active pattern: {PATTERN_NAMES[key]}", "", "Cycle sequence:"]
     for row_key, entry in entries:
         if row_key == key:
-            lines.append(f"> {entry:<{width}}  {seconds:>2}s left")
+            countdown = ("interactive: tap shoots, hold exits" if seconds is None
+                         else f"{seconds:>2}s left")
+            lines.append(f"> {entry:<{width}}  {countdown}")
         else:
             lines.append(f"  {entry}")
     if report_text is not None:

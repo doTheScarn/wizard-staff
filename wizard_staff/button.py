@@ -1,27 +1,6 @@
 """Debounce a momentary button and classify short press sequences."""
 
-
-PATTERN_OPTIONS = {
-    "quick": {"sequence": ("short",)},
-    "medium": {"sequence": ("medium",)},
-    "double_quick": {"sequence": ("short", "short")},
-    "quick_medium": {"sequence": ("short", "medium")},
-    "medium_quick": {"sequence": ("medium", "short")},
-    "double_medium": {"sequence": ("medium", "medium")},
-    "short_short_short": {"sequence": ("short", "short", "short")},
-    "short_short_medium": {"sequence": ("short", "short", "medium")},
-    "short_medium_short": {"sequence": ("short", "medium", "short")},
-    "short_medium_medium": {"sequence": ("short", "medium", "medium")},
-    "medium_short_short": {"sequence": ("medium", "short", "short")},
-    "medium_short_medium": {"sequence": ("medium", "short", "medium")},
-    "medium_medium_short": {"sequence": ("medium", "medium", "short")},
-    "medium_medium_medium": {"sequence": ("medium", "medium", "medium")},
-    "hold": {"sequence": ("long",), "hold": True},
-    "quick_hold": {"sequence": ("short", "long"), "hold": True},
-}
-PATTERNS_BY_SEQUENCE = {
-    option["sequence"]: name for name, option in PATTERN_OPTIONS.items()
-}
+from .patterns import PATTERNS_BY_SEQUENCE, PATTERN_OPTIONS
 
 
 class ButtonInterpreter:
@@ -35,6 +14,7 @@ class ButtonInterpreter:
         self.hold_event = None
         self.pending_presses = []
         self.last_press_at = None
+        self.pressed_interactive = False
 
     def _resolve_pending(self):
         event = PATTERNS_BY_SEQUENCE.get(tuple(self.pending_presses), "unset")
@@ -42,7 +22,7 @@ class ButtonInterpreter:
         self.last_press_at = None
         return event
 
-    def update(self, raw_pressed, now):
+    def update(self, raw_pressed, now, interactive=False):
         events = []
         if raw_pressed != self.candidate:
             self.candidate = raw_pressed
@@ -54,11 +34,17 @@ class ButtonInterpreter:
                         self.changed_at - self.last_press_at >= self.config.multi_press_s):
                     events.append(self._resolve_pending())
                 self.pressed_at = now
+                self.pressed_interactive = interactive
                 self.hold_started = False
                 self.hold_event = None
             else:
                 duration = now - self.pressed_at
-                if self.hold_started or duration >= self.config.long_press_s:
+                if self.pressed_interactive:
+                    if self.hold_started or duration >= self.config.long_press_s:
+                        events.append("interactive_exit_release")
+                    elif duration <= self.config.quick_press_max_s:
+                        events.append("interactive_shot")
+                elif self.hold_started or duration >= self.config.long_press_s:
                     if not self.hold_started:
                         self.hold_event = ("quick_hold" if self.pending_presses == ["short"]
                                            else "hold")
@@ -78,6 +64,9 @@ class ButtonInterpreter:
         if self.stable and not self.hold_started and self.pressed_at is not None:
             if now - self.pressed_at >= self.config.long_press_s:
                 self.hold_started = True
+                if self.pressed_interactive:
+                    events.append("interactive_exit")
+                    return events
                 self.hold_event = ("quick_hold" if self.pending_presses == ["short"]
                                    else "hold")
                 self.pending_presses.clear()

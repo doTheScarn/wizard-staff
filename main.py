@@ -39,7 +39,8 @@ def parse_args():
     parser.add_argument("--button-gpio", type=int, default=17)
     parser.add_argument("--virtual-button", choices=("cycle", "input"),
                         help="Cycle gestures with numbered base gaps, or enter "
-                             "1-3 for base patterns and a-f for gestures; "
+                             "1-3 for base patterns, a-g for patterns, s for an "
+                             "interactive shot, and x to exit that mode; "
                              "overrides the GPIO button.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--report-fps", action="store_true",
@@ -48,7 +49,9 @@ def parse_args():
                         help="Stop after this many seconds (useful for a preview).")
     parser.add_argument("--effect", choices=("quick", "double_quick", "medium",
                                               "hold_start", "quick_medium",
-                                              "quick_hold_start"),
+                                              "quick_hold_start",
+                                              "short_short_short",
+                                              "interactive_red_shots"),
                         help="Start a slot immediately; useful with --dry-run.")
     args = parser.parse_args()
     if args.effect and args.virtual_button:
@@ -135,7 +138,9 @@ def main():
                 break
             work_started = time.perf_counter() if args.report_fps else None
             if virtual_button is not None:
-                pressed = virtual_button.tick(now, staff.effect is not None)
+                pressed = virtual_button.tick(
+                    now, staff.effect is not None,
+                    staff.effect == "interactive_red_shots")
                 if virtual_button.base_selection is not None:
                     staff.select_base_pattern(virtual_button.base_selection, now)
                 if cycle_status is None:

@@ -2,21 +2,20 @@
 
 from .button import ButtonInterpreter
 from .config import StaffConfig
-from .effects import BASE_PATTERNS, StackingDropEffect, base_vectors, manual_vectors
+from .effects import (BASE_PATTERNS, InteractiveRedShots, StackingDropEffect,
+                      base_vectors, manual_vectors)
 from .geometry import StaffGeometry
+from .patterns import BASE_PATTERN_OPTIONS, PATTERN_OPTIONS
 from .vectors import render
 
-
-SLOTS = {
-    "quick": "descent_fill",
-    "double_quick": "upward_spirals",
-    "medium": "channel_wave",
-    "hold_start": "charge",
-    "quick_hold_start": "stack_drop",
-    "quick_medium": "opposed_pairs",
+SLOTS = {name: option.get("effect") for name, option in PATTERN_OPTIONS.items()}
+EXTENDABLE_EFFECTS = frozenset(
+    option["effect"] for option in PATTERN_OPTIONS.values()
+    if option.get("extend_on_hold"))
+EFFECT_OPTIONS = {
+    option["effect"]: option for option in PATTERN_OPTIONS.values()
+    if option.get("effect") is not None
 }
-
-EXTENDABLE_EFFECTS = frozenset(("upward_spirals", "channel_wave", "opposed_pairs"))
 
 
 class WizardStaff:
@@ -34,6 +33,8 @@ class WizardStaff:
         self.extension_candidate = None
         self.extension_held = False
         self.extension_stop_at = None
+        self.interactive_shots = None
+        self.effect_options = {}
 
     def select_base_pattern(self, number, now):
         """Select one base pattern until another selection replaces it."""
@@ -43,6 +44,17 @@ class WizardStaff:
         self.selected_base_started_at = now
 
     def trigger(self, slot, now):
+        if slot == "interactive_shot" and self.effect == "interactive_red_shots":
+            self.interactive_shots.shoot(now - self.effect_started_at)
+            return
+        if slot == "interactive_exit" and self.effect == "interactive_red_shots":
+            self.interactive_shots.clear()
+            self.interactive_shots = None
+            self.effect = None
+            self.effect_started_at = None
+            return
+        if slot in ("interactive_exit_release",):
+            return
         if (slot in ("hold_start", "quick_hold_start") and
                 self.extension_candidate is not None and
                 self.extension_candidate == self.effect):
@@ -64,14 +76,28 @@ class WizardStaff:
                 self.effect = "release_burst"
                 self.effect_started_at = now
             return
-        self.effect = SLOTS.get(slot) or "unset"
+        pattern_name = slot[:-6] if slot.endswith("_start") else slot
+        self.effect = (SLOTS.get(pattern_name) or
+                       (slot if slot in SLOTS.values() else "unset"))
+        self.effect_options = EFFECT_OPTIONS.get(self.effect, {})
+        if self.effect == "interactive_red_shots":
+            self.interactive_shots = InteractiveRedShots(
+                self.geometry, self.config.max_brightness,
+                self.effect_options.get("downward_acceleration", "off"),
+                self.effect_options.get("allow_reversal", True))
+        else:
+            self.interactive_shots = None
         self.effect_started_at = now
         self.extension_candidate = None
         self.extension_held = False
         self.extension_stop_at = None
         self.stack_effect = (StackingDropEffect(
                                  self.geometry,
-                                 max_brightness=self.config.max_brightness)
+                                 max_brightness=self.config.max_brightness,
+                                 downward_acceleration_level=self.effect_options.get(
+                                     "downward_acceleration", "off"),
+                                 allow_reversal=self.effect_options.get(
+                                     "allow_reversal", True))
                              if self.effect == "stack_drop" else None)
 
     def _render(self, vectors):
@@ -87,12 +113,16 @@ class WizardStaff:
                 self.effect in EXTENDABLE_EFFECTS and
                 self.extension_stop_at is None):
             self.extension_candidate = self.effect
-        for event in self.button.update(pressed, now):
+        interactive = self.effect == "interactive_red_shots"
+        for event in self.button.update(pressed, now, interactive=interactive):
             self.trigger(event, now)
         if not self.button.stable and not self.button.candidate and not self.extension_held:
             self.extension_candidate = None
         if self.effect is not None:
-            if self.stack_effect is not None:
+            if self.interactive_shots is not None:
+                vectors, finished = self.interactive_shots.vectors(
+                    now - self.effect_started_at), False
+            elif self.stack_effect is not None:
                 vectors, finished = self.stack_effect.vectors(now - self.effect_started_at)
             else:
                 vectors, finished = manual_vectors(self.effect, now - self.effect_started_at,
@@ -100,7 +130,8 @@ class WizardStaff:
                                                    self.config.max_brightness,
                                                    continuation=(self.extension_candidate is not None or
                                                                  self.extension_held),
-                                                   stop_at=self.extension_stop_at)
+                                                   stop_at=self.extension_stop_at,
+                                                   options=self.effect_options)
             if not finished:
                 return self._render(vectors)
             self.effect = None
@@ -118,6 +149,7 @@ class WizardStaff:
             pattern_name = BASE_PATTERNS[pattern_index]
             pattern_time = elapsed % self.config.base_pattern_s
         vectors = base_vectors(pattern_name, pattern_time,
-                               self.geometry, self.config.max_brightness)
+                               self.geometry, self.config.max_brightness,
+                               BASE_PATTERN_OPTIONS.get(pattern_name))
         return self._render(vectors)
 

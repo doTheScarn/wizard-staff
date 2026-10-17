@@ -44,9 +44,11 @@ Without virtual-button selection, the base patterns cycle every 18 seconds:
    at 9.6 vertical LEDs per second.
 3. A bright orange orb that turns dim red 100 ms before launching each white,
    eight-LED vector. The first launch waits for its red cue. The vectors fall
-   at 120 stem LEDs per second at half their former brightness, stop just above
-   the eight-LED blue anchor, and bounce back upward while fading to 5% of
-   full output at the top. Rising and falling vectors cross near the middle.
+   at 120 stem LEDs per second at half their former brightness and stop just
+   above the eight-LED blue anchor. Downward acceleration is medium for this
+   pattern (4 physical wraps/s²); the vector reflects with the same speed and
+   gravity slows it as it rises. Rising and falling vectors cross near the
+   middle.
    Rainbow sparks remain available in code but are out of the cycle.
 
 The button has software debounce and a 0.38-second multi-press window:
@@ -71,7 +73,7 @@ three-press sequences are currently unassigned and show the unset indicator:
 | Short, then medium | Opposed pairs |
 | Medium, then short | Unassigned |
 | Two mediums | Unassigned |
-| Short, short, short | Unassigned |
+| Short, short, short | Interactive red shots |
 | Short, short, medium | Unassigned |
 | Short, medium, short | Unassigned |
 | Short, medium, medium | Unassigned |
@@ -87,7 +89,12 @@ Releasing stops new launches and lets active vectors clear. Pattern e normally
 launches for three seconds.
 One- and two-press short/medium patterns are recognized after the multi-press
 window closes; three-press patterns are recognized on the third release. A hold
-starts its effect as soon as the long-press threshold is crossed.
+starts its effect as soon as the long-press threshold is crossed. In interactive
+red-shot mode the staff goes dark; each short press launches a red vector up the
+helix with an eight-wrap fading tail. When it reaches the orb after 0.4 seconds,
+the orb flashes red and fades over 0.2 seconds. Shots can overlap. Hold the
+button for the normal 0.85-second threshold to exit; the staff immediately
+returns to its selected or scheduled base pattern.
 The quick-then-hold slot drops eight bars per second (two per second in each of
 the default four channels) at 100 vertical pixels per second. Each channel
 stacks up to ten bars, or 40 vertical pixels. Extra drops disappear when they
@@ -112,17 +119,28 @@ python -m unittest discover -s tests -v
 
 `--virtual-button` replaces GPIO button input while keeping the normal gesture
 classifier. In `input` mode, type `1`, `2`, or `3` followed by Enter to select
-a base pattern, or `a` through `f` to simulate the corresponding gesture above.
-Type `q` to quit. Commands entered while an effect is running are queued.
+a base pattern, `a` through `g` to simulate a gesture, `s` to launch an
+interactive shot, or `x` to hold and exit interactive mode. Type `q` to quit.
+Commands entered while a finite effect is running are queued; `s` and `x` can
+also be entered while interactive mode is active.
 Hold gestures stay active for about five seconds before release. A selected
 base pattern resumes after a triggered effect.
-In `cycle` mode, the fixed route is `a, 1, b, 2, c, 3, d, 1, e, 2, f, 3`,
-then back to `a`. Each base step lasts five seconds after its triggered effect
-finishes. The terminal display shows this full route in order, highlights its
-active row, and updates a countdown in a fixed column. The drop and unload
-phases of `f` share one row. Cycle mode uses this display in place of the
-dry-run LED preview. Either mode can drive the real LEDs without a wired
+In `cycle` mode, the route includes `g` for interactive red shots after the
+existing `a` through `f` gestures and their base-pattern gaps. It demonstrates
+three shots at irregular intervals, then holds to exit and resumes the route.
+Each base step lasts five seconds after its triggered effect finishes. The
+terminal display shows the route in order, highlights its active row, and
+updates a countdown in a fixed column. Interactive mode displays its tap/hold
+instructions instead of a countdown. Cycle mode uses this display in place of
+the dry-run LED preview. Either mode can drive the real LEDs without a wired
 button by omitting `--dry-run`.
+
+The optional `downward_acceleration` value in `wizard_staff/patterns.py` is
+`low`, `med`, or `high`, meaning 2, 4, or 6 physical wraps/s². Omitting it (or
+setting it to `off`) preserves the original motion. The default medium value is
+applied to the bouncing-vector base pattern; other patterns are off unless
+their mapping is changed. The optional `allow_reversal` mapping field defaults
+to true for upward motion.
 
 On the Raspberry Pi, connect the strip data line
 to the configured NeoPixel pin (default `D18`), and wire a normally-open

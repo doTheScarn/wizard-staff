@@ -1,29 +1,35 @@
 """In-place terminal status for the virtual button cycle."""
 
-from .effects import BASE_PATTERNS
-from .virtual_button import BASE_INTERVAL_SECONDS
-
-
 PATTERN_ROWS = (
-    ("green_spiral", "B1", "Green spiral"),
-    ("green_channels", "B2", "Green channels"),
-    ("rainbow_sparks", "B3", "Rainbow sparks"),
-    ("descent_fill", "a", "Descent fill"),
-    ("upward_spirals", "b", "Upward spirals"),
-    ("channel_wave", "c", "Channel wave"),
-    ("charge", "d", "Charge hold"),
-    ("release_burst", "d", "Release burst"),
-    ("unset", "e", "Unset indicator"),
-    ("stack_drop", "f", "Stacking drops"),
-    ("stack_unload", "f", "Stack unload"),
+    ("a", "a", "Descent fill"),
+    ("base_a", "1", "Green spiral"),
+    ("b", "b", "Upward spirals"),
+    ("base_b", "2", "Green channels"),
+    ("c", "c", "Channel wave"),
+    ("base_c", "3", "Bouncing vectors"),
+    ("d", "d", "Charge / release burst"),
+    ("base_d", "1", "Green spiral"),
+    ("e", "e", "Unset indicator"),
+    ("base_e", "2", "Green channels"),
+    ("f", "f", "Stacking drops / unload"),
+    ("base_f", "3", "Bouncing vectors"),
 )
 PATTERN_NAMES = {key: name for key, _, name in PATTERN_ROWS}
 EFFECT_LENGTHS = {
-    "descent_fill": 4.0,
-    "upward_spirals": 2.7,
+    "descent_fill": 3.5,
     "channel_wave": 3.0,
     "release_burst": 1.5,
     "unset": 0.45,
+}
+EFFECT_ROWS = {
+    "descent_fill": "a",
+    "upward_spirals": "b",
+    "channel_wave": "c",
+    "charge": "d",
+    "release_burst": "d",
+    "unset": "e",
+    "stack_drop": "f",
+    "stack_unload": "f",
 }
 
 
@@ -47,7 +53,7 @@ def _next_effect_at(player):
 
 
 def status_snapshot(staff, player, now):
-    """Return (active pattern key, rounded seconds remaining)."""
+    """Return (active route row, rounded seconds remaining)."""
     effect = staff.effect
     if effect is not None:
         if effect in ("charge", "stack_drop"):
@@ -56,21 +62,24 @@ def status_snapshot(staff, player, now):
         elif effect == "stack_unload":
             remaining = (staff.effect_started_at +
                          staff.stack_effect.unload_finish_at - now)
+        elif effect == "upward_spirals":
+            stem = len(staff.geometry.stem)
+            rise_speed = (stem + 6) / 0.9
+            duration = 1.3 + (stem * 1.2 + 6) / rise_speed + 0.12
+            remaining = staff.effect_started_at + duration - now
         else:
             remaining = staff.effect_started_at + EFFECT_LENGTHS[effect] - now
-        key = effect
+        key = EFFECT_ROWS[effect]
     else:
-        elapsed = max(0.0, now - staff.started_at)
-        pattern_duration = staff.config.base_pattern_s
-        key = BASE_PATTERNS[int(elapsed // pattern_duration) % len(BASE_PATTERNS)]
-        remaining = pattern_duration - elapsed % pattern_duration
-        if player.current_key is not None:
-            if player.effect_seen:
-                remaining = min(remaining, BASE_INTERVAL_SECONDS)
-            else:
-                remaining = min(remaining, _next_effect_at(player) - now)
-        elif player.base_until is not None:
-            remaining = min(remaining, player.base_until - now)
+        if player.base_until is not None and now < player.base_until:
+            key = f"base_{player.base_after_key}"
+            remaining = player.base_until - now
+        elif player.current_key is not None:
+            key = player.current_key
+            remaining = max(0.0, _next_effect_at(player) - now)
+        else:
+            key = "a"
+            remaining = 0.0
     return key, int(max(0.0, remaining) + 0.5)
 
 
@@ -79,10 +88,10 @@ def format_status(staff, player, now, report_text=None):
     entries = [(row_key, f"{code:<2}  {name}")
                for row_key, code, name in PATTERN_ROWS]
     width = max(len(entry) for _, entry in entries)
-    lines = [f"Active pattern: {PATTERN_NAMES[key]}", "", "Rotating patterns:"]
+    lines = [f"Active pattern: {PATTERN_NAMES[key]}", "", "Cycle sequence:"]
     for row_key, entry in entries:
         if row_key == key:
-            lines.append(f"> {entry:<{width}}  {seconds}s left")
+            lines.append(f"> {entry:<{width}}  {seconds:>2}s left")
         else:
             lines.append(f"  {entry}")
     if report_text is not None:

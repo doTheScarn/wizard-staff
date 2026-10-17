@@ -38,7 +38,8 @@ def parse_args():
                         default="tire_pixel")
     parser.add_argument("--button-gpio", type=int, default=17)
     parser.add_argument("--virtual-button", choices=("cycle", "input"),
-                        help="Simulate button gestures automatically or from terminal input; "
+                        help="Cycle gestures with numbered base gaps, or enter "
+                             "1-3 for base patterns and a-f for gestures; "
                              "overrides the GPIO button.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--report-fps", action="store_true",
@@ -89,8 +90,8 @@ def main():
                     if args.virtual_button == "cycle" else None)
     commands = Queue() if args.virtual_button == "input" else None
     if commands is not None:
-        mapping = ", ".join(f"{key}/{index}: {label}" for index, (key, label)
-                            in enumerate(VIRTUAL_GESTURES, start=1))
+        mapping = ("1-3: base patterns; " +
+                   ", ".join(f"{key}: {label}" for key, label in VIRTUAL_GESTURES))
         print(f"Virtual button commands: {mapping}. Type q to quit.", flush=True)
         threading.Thread(target=read_virtual_commands, args=(commands,),
                          daemon=True).start()
@@ -135,6 +136,8 @@ def main():
             work_started = time.perf_counter() if args.report_fps else None
             if virtual_button is not None:
                 pressed = virtual_button.tick(now, staff.effect is not None)
+                if virtual_button.base_selection is not None:
+                    staff.select_base_pattern(virtual_button.base_selection, now)
                 if cycle_status is None:
                     for announcement in virtual_button.announcements:
                         print(announcement, flush=True)

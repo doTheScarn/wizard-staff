@@ -27,6 +27,15 @@ class WizardStaff:
         self.effect_started_at = None
         self.charge_time = 0.0
         self.stack_effect = None
+        self.selected_base = None
+        self.selected_base_started_at = None
+
+    def select_base_pattern(self, number, now):
+        """Select one base pattern until another selection replaces it."""
+        if not 1 <= number <= len(BASE_PATTERNS):
+            raise ValueError("base pattern number out of range")
+        self.selected_base = BASE_PATTERNS[number - 1]
+        self.selected_base_started_at = now
 
     def trigger(self, slot, now):
         if slot == "quick_hold_release":
@@ -70,10 +79,15 @@ class WizardStaff:
             self.effect = None
             self.stack_effect = None
 
-        elapsed = now - self.started_at
-        pattern_index = int(elapsed // self.config.base_pattern_s) % len(BASE_PATTERNS)
-        pattern_time = elapsed % self.config.base_pattern_s
-        vectors = base_vectors(BASE_PATTERNS[pattern_index], pattern_time,
+        if self.selected_base is not None:
+            pattern_name = self.selected_base
+            pattern_time = now - self.selected_base_started_at
+        else:
+            elapsed = now - self.started_at
+            pattern_index = int(elapsed // self.config.base_pattern_s) % len(BASE_PATTERNS)
+            pattern_name = BASE_PATTERNS[pattern_index]
+            pattern_time = elapsed % self.config.base_pattern_s
+        vectors = base_vectors(pattern_name, pattern_time,
                                self.geometry, self.config.max_brightness)
         return self._render(vectors)
 

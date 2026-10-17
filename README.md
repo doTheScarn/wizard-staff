@@ -36,24 +36,27 @@ turn is handled automatically.
 
 ## Patterns and button slots
 
-The base patterns cycle automatically every 18 seconds:
+Without virtual-button selection, the base patterns cycle every 18 seconds:
 
-1. Green orb pulsing twice per second, with fading lights following the helix
-   downward.
-2. The same orb with lights moving downward along vertical channels.
-3. Rainbow orb, dim stem, and four distributed sparks that change 20 times
-   per second.
+1. A gently pulsing green orb with a brief white accent at each launch, and
+   fading lights falling along the helix at 48 stem LEDs per second.
+2. The same orb and launch accent with lights falling along vertical channels
+   at 9.6 vertical LEDs per second.
+3. A bright orange orb that briefly turns dim red as it launches white,
+   eight-LED vectors. They fall at 120 stem LEDs per second, bounce from the
+   eight-LED blue anchor at the bottom, and cross rising vectors near the
+   middle. Rainbow sparks remain available in code but are out of the cycle.
 
 The button has software debounce and a 0.38-second multi-press window:
 
 | Gesture | Slot | Effect |
 | --- | --- | --- |
-| One quick press | 1 | Orb dark; light descends; color fills bottom to top; orb flashes |
-| Two quick presses | 2 | Repeated fast upward spirals, flashing the orb at each arrival |
-| Medium press | 3 | Colored vertical-channel wave |
-| Long press and hold | 4 | Faster, more frequent upward lights while held; release burst |
-| Quick press then medium press | 5 | Unset; top four stem pixels glow dim red briefly |
-| Quick press then long hold | 6 | Colored four-pixel bars drop down successive vertical channels and stack; release sends one bar per channel upward at a time, with white orb flashes |
+| One quick press | a | Light descends, then leads a steady purple fill back up; orb flashes |
+| Two quick presses | b | Overlapping groups of three upward spirals; dull yellow orb flashes blue when each group arrives |
+| Medium press | c | Dimmer channel wave with a six-row dark gap, rotating eight times per second under a white orb |
+| Long press and hold | d | Slower upward lights and a brighter blue orb while held; release burst |
+| Quick press then medium press | e | Unset; top four stem pixels glow dim red briefly |
+| Quick press then long hold | f | Four-pixel bars drop and stack with the orb off; release unloads the bars under a rising white orb, then three flashes and a short white hold |
 
 Timings and slot assignments are in `wizard_staff/config.py` and
 `wizard_staff/controller.py`. Unset slots use the same red indicator.
@@ -63,9 +66,10 @@ The quick-then-hold slot drops eight bars per second (two per second in each of
 the default four channels) at 100 vertical pixels per second. Each channel
 stacks up to ten bars, or 40 vertical pixels. Extra drops disappear when they
 reach the full stack. On release, in-flight drops clear and the stacks unload
-at 200 vertical pixels per second. The orb glows faint blue while dropping,
-red while unloading, and flashes white as bars reach the top. These three
-speeds, the bar length, and the stack limit are parameters of
+at 200 vertical pixels per second. The orb is off while dropping and ramps to
+bright white as the last bars rise. After
+unloading, it flashes three times and stays white for a quarter second. These
+three speeds, the bar length, and the stack limit are parameters of
 `StackingDropEffect`.
 
 ## Run
@@ -81,17 +85,18 @@ python -m unittest discover -s tests -v
 ```
 
 `--virtual-button` replaces GPIO button input while keeping the normal gesture
-classifier. In `input` mode, type a letter or digit followed by Enter:
-`a`/`1` = one quick press, `b`/`2` = two quick presses, `c`/`3` = medium press,
-`d`/`4` = long hold, `e`/`5` = quick then medium (unset), and `f`/`6` = quick
-then long hold. Type `q` to quit. Commands entered while an effect is running
-are queued. Hold gestures stay active for about five seconds before release.
-In `cycle` mode the six gestures repeat in that order. After each triggered
-effect finishes, the base pattern cycle plays for five seconds before the next
-gesture. The terminal display updates in place, showing the active pattern and
-a countdown beside its entry in the full pattern list. Cycle mode uses this
-display in place of the dry-run LED preview. Either mode can drive the real LEDs
-without a wired button by omitting `--dry-run`.
+classifier. In `input` mode, type `1`, `2`, or `3` followed by Enter to select
+a base pattern, or `a` through `f` to simulate the corresponding gesture above.
+Type `q` to quit. Commands entered while an effect is running are queued.
+Hold gestures stay active for about five seconds before release. A selected
+base pattern resumes after a triggered effect.
+In `cycle` mode, the fixed route is `a, 1, b, 2, c, 3, d, 1, e, 2, f, 3`,
+then back to `a`. Each base step lasts five seconds after its triggered effect
+finishes. The terminal display shows this full route in order, highlights its
+active row, and updates a countdown in a fixed column. The drop and unload
+phases of `f` share one row. Cycle mode uses this display in place of the
+dry-run LED preview. Either mode can drive the real LEDs without a wired
+button by omitting `--dry-run`.
 
 On the Raspberry Pi, connect the strip data line
 to the configured NeoPixel pin (default `D18`), and wire a normally-open

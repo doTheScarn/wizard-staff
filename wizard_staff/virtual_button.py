@@ -11,8 +11,6 @@ VIRTUAL_GESTURES = (
     ("e", "quick press, then medium press (unset)"),
     ("f", "quick press, then long hold"),
 )
-KEY_ALIASES = {str(index): key for index, (key, _) in
-               enumerate(VIRTUAL_GESTURES, start=1)}
 LABELS = dict(VIRTUAL_GESTURES)
 HOLD_EFFECT_SECONDS = 5.0
 BASE_INTERVAL_SECONDS = 5.0
@@ -34,12 +32,14 @@ class VirtualButtonPlayer:
         self.script_end = 0.0
         self.effect_seen = False
         self.base_until = None
+        self.base_number = None
+        self.base_after_key = None
+        self.base_selection = None
         self.announcements = []
 
     def enqueue(self, text):
         key = text.strip().lower()
-        key = KEY_ALIASES.get(key, key)
-        if key not in LABELS:
+        if key not in LABELS and key not in ("1", "2", "3"):
             return False
         self.pending.append(key)
         return True
@@ -65,6 +65,9 @@ class VirtualButtonPlayer:
 
     def _start(self, key, now):
         self.current_key = key
+        self.base_until = None
+        self.base_number = None
+        self.base_after_key = None
         self.effect_seen = False
         self.started_at = now
         self.intervals = self._intervals_for(key)
@@ -75,6 +78,7 @@ class VirtualButtonPlayer:
     def tick(self, now, effect_active=False):
         """Return the raw button state to pass to WizardStaff.step()."""
         self.announcements = []
+        self.base_selection = None
         if self.current_key is not None and effect_active:
             self.effect_seen = True
         if (self.current_key is not None and
@@ -83,7 +87,12 @@ class VirtualButtonPlayer:
             self.current_key = None
             if self.mode == "cycle":
                 self.base_until = now + BASE_INTERVAL_SECONDS
-                self.announcements.append("Base patterns for 5 seconds")
+                self.base_after_key = VIRTUAL_GESTURES[
+                    (self.next_cycle_index - 1) % len(VIRTUAL_GESTURES)][0]
+                self.base_number = ((self.next_cycle_index - 1) % 3) + 1
+                self.base_selection = self.base_number
+                self.announcements.append(
+                    f"Base pattern {self.base_number} for 5 seconds")
 
         if self.current_key is None and not effect_active:
             if self.mode == "cycle":
@@ -93,7 +102,12 @@ class VirtualButtonPlayer:
                                              len(VIRTUAL_GESTURES))
                     self._start(key, now)
             elif self.pending:
-                self._start(self.pending.popleft(), now)
+                key = self.pending.popleft()
+                if key in ("1", "2", "3"):
+                    self.base_selection = int(key)
+                    self.announcements.append(f"Base pattern {key}")
+                else:
+                    self._start(key, now)
 
         if self.current_key is None:
             return False

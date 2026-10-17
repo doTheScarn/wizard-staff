@@ -8,12 +8,18 @@ from dataclasses import dataclass
 from .vectors import LightVector, solid, trail
 
 
-BASE_PATTERNS = ("green_spiral", "green_channels", "rainbow_sparks")
+BASE_PATTERNS = ("green_spiral", "green_channels", "bounce_vectors")
 ORB_PULSE_HZ = 2.0
-SPIRAL_LEDS_PER_SECOND = 24.0
-CHANNEL_ROWS_PER_SECOND = 4.8
+SPIRAL_LEDS_PER_SECOND = 48.0
+CHANNEL_ROWS_PER_SECOND = 9.6
 RAINBOW_CYCLE_SECONDS = 6.0
 SPARK_CHANGES_PER_SECOND = 20
+ORB_ACCENT_SECONDS = 0.1
+BOUNCE_LEDS_PER_SECOND = 120.0
+CHANNEL_ROTATIONS_PER_SECOND = 8.0
+CHANNEL_WAVE_ROWS_PER_SECOND = 80.0
+CHANNEL_WAVE_PERIOD_ROWS = 24
+CHANNEL_WAVE_DARK_ROWS = 6
 
 
 @dataclass(frozen=True)
@@ -56,8 +62,7 @@ class StackingDropEffect:
         self.unloading = [[] for _ in self.paths]  # Top to bottom: (top row, color).
         self.unload_index = [0 for _ in self.paths]
         self.unload_started_at = [0.0 for _ in self.paths]
-        self.unload_flashed = [False for _ in self.paths]
-        self.flash_until = 0.0
+        self.unload_motion_end_at = None
         self.unload_finish_at = None
 
     def _advance_drops(self, elapsed):
@@ -102,19 +107,19 @@ class StackingDropEffect:
                 for level, color in reversed(list(enumerate(self.stacks[channel])))
             ]
             self.unload_started_at[channel] = elapsed
-        self.unload_finish_at = elapsed
+        self.unload_motion_end_at = elapsed
         for queue in self.unloading:
             next_start = elapsed
             for top, _ in queue:
-                arrival = next_start + top / self.rise_speed
                 next_start += (top + self.vector_length) / self.rise_speed
-                self.unload_finish_at = max(self.unload_finish_at,
-                                            next_start, arrival + 0.08)
+                self.unload_motion_end_at = max(self.unload_motion_end_at,
+                                                next_start)
+        self.unload_finish_at = self.unload_motion_end_at + 0.61
 
     def vectors(self, elapsed):
         if self.released_at is None:
             self._advance_drops(elapsed)
-            vectors = [solid(self.geometry.orb, (0, 20, 90), 0.3)]
+            vectors = []
             for channel, path in enumerate(self.paths):
                 for level, color in enumerate(self.stacks[channel]):
                     top = len(path) - (level + 1) * self.vector_length
@@ -132,16 +137,11 @@ class StackingDropEffect:
                 index = self.unload_index[channel]
                 top, _ = queue[index]
                 started = self.unload_started_at[channel]
-                arrival = started + top / self.rise_speed
                 end = started + (top + self.vector_length) / self.rise_speed
-                if elapsed >= arrival and not self.unload_flashed[channel]:
-                    self.flash_until = max(self.flash_until, arrival + 0.08)
-                    self.unload_flashed[channel] = True
                 if elapsed < end:
                     break
                 self.unload_index[channel] += 1
                 self.unload_started_at[channel] = end
-                self.unload_flashed[channel] = False
 
             index = self.unload_index[channel]
             if index < len(queue):
@@ -153,17 +153,20 @@ class StackingDropEffect:
             for top, color in queue[index + 1:]:
                 vectors.append(solid(path[top:top + self.vector_length], color))
 
-        finished = (all(index == len(queue) for index, queue in
-                        zip(self.unload_index, self.unloading)) and
-                    elapsed >= self.flash_until)
+        finished = elapsed >= self.unload_finish_at
         if finished:
             return [], True
-        orb_color = (255, 255, 255) if elapsed < self.flash_until else (140, 10, 10)
-        vectors.insert(0, solid(
-            self.geometry.orb, orb_color,
-            1.0 if elapsed < self.flash_until else 0.35,
-            brightness_override=(self.max_brightness if elapsed < self.flash_until
-                                 else None)))
+        if elapsed < self.unload_motion_end_at:
+            duration = max(0.001, self.unload_motion_end_at - self.released_at)
+            orb_level = max(0.0, min(1.0, (elapsed - self.released_at) / duration))
+        else:
+            post = elapsed - self.unload_motion_end_at
+            orb_level = (1.0 if post >= 0.36 or
+                         any(start <= post < start + 0.06
+                             for start in (0.06, 0.18, 0.30)) else 0.0)
+        if orb_level:
+            vectors.insert(0, solid(self.geometry.orb, (255, 255, 255),
+                                    orb_level, brightness_override=self.max_brightness))
         return vectors, False
 
 
@@ -173,7 +176,15 @@ def rainbow(phase, scale=255):
 
 
 def _pulse(t):
-    return 0.12 + 0.58 * (0.5 + 0.5 * math.cos(2 * math.pi * t * ORB_PULSE_HZ))
+    return 0.44 + 0.24 * (0.5 + 0.5 * math.cos(2 * math.pi * t * ORB_PULSE_HZ))
+
+
+def _launch_accent(t, speeds_and_offsets):
+    """Peak a subtle white overlay halfway through each 0.1-second launch cue."""
+    age = min(((t * speed + offset) % span) / speed
+              for speed, offset, span in speeds_and_offsets)
+    return max(0.0, 1.0 - abs(age - ORB_ACCENT_SECONDS / 2) /
+               (ORB_ACCENT_SECONDS / 2))
 
 
 def base_vectors(name, t, geometry, max_brightness=0.5):
@@ -182,20 +193,52 @@ def base_vectors(name, t, geometry, max_brightness=0.5):
         vectors.append(solid(geometry.orb, (0, 220, 20), _pulse(t)))
         if name == "green_spiral":
             count = len(geometry.stem)
+            launches = []
             for index in range(3):
-                position = (t * SPIRAL_LEDS_PER_SECOND + index * count / 3) % (count + 6) - 3
+                offset = index * count / 3
+                span = count + 6
+                position = (t * SPIRAL_LEDS_PER_SECOND + offset) % span - 3
+                launches.append((SPIRAL_LEDS_PER_SECOND, offset, span))
                 depth = max(0.0, min(1.0, position / count))
                 vectors.append(trail(geometry.stem, (40, 170, 100), position,
                                      length=5, brightness=0.8 * (1 - 0.75 * depth)))
         else:
             stride = max(1, geometry.leds_per_repeat // 4)
             selected = range(0, geometry.leds_per_repeat, stride)
+            launches = []
             for index, channel_number in enumerate(list(selected)[:4]):
                 path = geometry.channel(channel_number)
-                position = (t * CHANNEL_ROWS_PER_SECOND + index * len(path) / 4) % (len(path) + 3) - 1
+                offset = index * len(path) / 4
+                span = len(path) + 3
+                position = (t * CHANNEL_ROWS_PER_SECOND + offset) % span - 1
+                launches.append((CHANNEL_ROWS_PER_SECOND, offset, span))
                 depth = max(0.0, min(1.0, position / len(path)))
                 vectors.append(trail(path, (55, 210, 95), position,
                                      length=3, brightness=0.85 * (1 - 0.65 * depth)))
+        accent = _launch_accent(t, launches)
+        if accent:
+            vectors.append(solid(geometry.orb, (255, 255, 255), 0.25 * accent))
+        return vectors
+
+    if name == "bounce_vectors":
+        stem = geometry.stem
+        length = min(8, len(stem))
+        bottom = max(0, len(stem) - length)
+        travel_s = max(0.001, bottom / BOUNCE_LEDS_PER_SECOND)
+        vectors.append(solid(stem[-length:], (0, 20, 255), 0.9))
+        phase = t % travel_s
+        orb_color = (190, 28, 0) if phase < 0.10 else (255, 100, 0)
+        orb_level = 0.55 if phase < 0.10 else 0.9
+        vectors.append(solid(geometry.orb, orb_color, orb_level,
+                             brightness_override=max_brightness))
+        for launch in range(max(0, int(t // travel_s) - 1), int(t // travel_s) + 1):
+            age = t - launch * travel_s
+            if not 0 <= age < 2 * travel_s:
+                continue
+            distance = min(age, 2 * travel_s - age) * BOUNCE_LEDS_PER_SECOND
+            vectors.append(LightVector(
+                stem, tuple((offset, (255, 255, 255)) for offset in range(length)),
+                min(bottom, distance), 0.8, brightness_override=max_brightness))
         return vectors
 
     if name == "rainbow_sparks":
@@ -220,51 +263,76 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
     """Return (vectors, finished) for a finite triggered effect."""
     stem = geometry.stem
     if name == "descent_fill":
-        if elapsed < 1.5:
-            position = -1 + elapsed / 1.5 * (len(stem) + 2)
+        fall_s = 1.0
+        fill_s = 1.5
+        if elapsed < fall_s:
+            position = -1 + elapsed / fall_s * (len(stem) + 2)
             return [trail(stem, (20, 200, 255), position, length=6)], False
-        if elapsed < 3.0:
-            fraction = (elapsed - 1.5) / 1.5
+        if elapsed < fall_s + fill_s:
+            fraction = (elapsed - fall_s) / fill_s
             lit = min(len(stem), math.ceil(fraction * len(stem)))
-            return [solid(stem[-lit:], (160, 30, 230), 0.75)] if lit else [], False
-        if elapsed < 4.0:
-            color = rainbow(math.floor((elapsed - 3) * 9) / 9)
-            return [solid(stem, (22, 4, 35)),
+            head = len(stem) - 1 - fraction * (len(stem) - 1)
+            vectors = [solid(stem[-lit:], (160, 30, 230), 0.8)] if lit else []
+            vectors.append(trail(stem, (20, 200, 255), head,
+                                 length=6, direction=-1))
+            return vectors, False
+        if elapsed < 3.5:
+            color = rainbow(math.floor((elapsed - 2.5) * 9) / 9)
+            return [solid(stem, (160, 30, 230), 0.8),
                     solid(geometry.orb, color, 0.85,
                           brightness_override=max_brightness)], False
         return [], True
 
     if name == "upward_spirals":
-        cycle_s = 0.9
-        if elapsed >= 3 * cycle_s:
+        group_interval = 0.65
+        rise_speed = (len(stem) + 6) / 0.9
+        last_arrival = 2 * group_interval + (len(stem) * 1.2 + 6) / rise_speed
+        if elapsed >= last_arrival + 0.12:
             return [], True
-        phase = (elapsed % cycle_s) / cycle_s
-        vectors = []
-        for index in range(3):
-            offset = index * len(stem) / 5
-            position = len(stem) + offset - phase * (len(stem) + 6)
-            vectors.append(trail(stem, rainbow(index / 3 + elapsed / 5),
-                                 position, length=5, direction=-1))
-        if phase > 0.78:
-            vectors.append(solid(geometry.orb, rainbow(elapsed / 3),
-                                 (phase - 0.78) / 0.22,
-                                 brightness_override=max_brightness))
+        vectors = [solid(geometry.orb, (170, 125, 10), 0.55)]
+        for group in range(3):
+            started = group * group_interval
+            if elapsed < started:
+                continue
+            for index in range(3):
+                offset = index * len(stem) / 10
+                position = len(stem) + offset - rise_speed * (elapsed - started)
+                vectors.append(trail(stem, rainbow(index / 3 + group / 5),
+                                     position, length=5, direction=-1))
+            arrival = started + (len(stem) * 1.2 + 6) / rise_speed
+            flash_age = elapsed - arrival
+            if 0 <= flash_age < 0.12:
+                vectors.append(solid(geometry.orb, (30, 90, 255),
+                                     0.35 * math.sin(math.pi * flash_age / 0.12)))
         return vectors, False
 
     if name == "channel_wave":
         if elapsed >= 3.0:
             return [], True
-        vectors = [solid(geometry.orb, (60, 0, 100), 0.35)]
-        for number, path in enumerate(geometry.channels):
-            phase = elapsed * 2.5 - number / geometry.leds_per_repeat
-            brightness = 0.15 + 0.65 * (0.5 + 0.5 * math.cos(2 * math.pi * phase))
-            vectors.append(solid(path, rainbow(number / geometry.leds_per_repeat),
-                                 brightness))
+        vectors = [solid(geometry.orb, (255, 255, 255), 0.8,
+                         brightness_override=max_brightness)]
+        channels = geometry.channels
+        rotation = int(elapsed * CHANNEL_ROTATIONS_PER_SECOND) % len(channels)
+        for source in range(len(channels)):
+            path = channels[(source + rotation) % len(channels)]
+            pulse = 0.15 + 0.65 * (0.5 + 0.5 * math.cos(
+                2 * math.pi * (elapsed * 2.5 - source / len(channels))))
+            color = rainbow(source / len(channels))
+            samples = []
+            for row in range(len(path)):
+                phase = (row + elapsed * CHANNEL_WAVE_ROWS_PER_SECOND) % CHANNEL_WAVE_PERIOD_ROWS
+                if phase < CHANNEL_WAVE_DARK_ROWS:
+                    continue
+                ramp = 1.0 - (phase - CHANNEL_WAVE_DARK_ROWS) / (
+                    CHANNEL_WAVE_PERIOD_ROWS - CHANNEL_WAVE_DARK_ROWS)
+                samples.append((row, tuple(round(c * ramp) for c in color)))
+            vectors.append(LightVector(path, tuple(samples), brightness=0.5 * pulse))
         return vectors, False
 
     if name == "charge":
-        speed = 0.6 + min(elapsed, 8.0) * 0.25
-        vectors = [solid(geometry.orb, (15, 0, 80), min(0.8, 0.15 + elapsed * 0.07))]
+        speed = 0.3 + min(elapsed, 8.0) * 0.125
+        vectors = [solid(geometry.orb, (10, 80, 255),
+                         min(0.9, 0.35 + elapsed * 0.07))]
         for index in range(7):
             position = (len(stem) - 1 - (elapsed * speed + index / 7) * len(stem)) % (len(stem) + 5)
             vectors.append(trail(stem, rainbow(index / 7 + elapsed * 0.1),

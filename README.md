@@ -42,21 +42,23 @@ Without virtual-button selection, the base patterns cycle every 18 seconds:
    fading lights falling along the helix at 48 stem LEDs per second.
 2. The same orb and launch accent with lights falling along vertical channels
    at 9.6 vertical LEDs per second.
-3. A bright orange orb that briefly turns dim red as it launches white,
-   eight-LED vectors. They fall at 120 stem LEDs per second, bounce from the
-   eight-LED blue anchor at the bottom, and cross rising vectors near the
-   middle. Rainbow sparks remain available in code but are out of the cycle.
+3. A bright orange orb that turns dim red 100 ms before launching each white,
+   eight-LED vector. The first launch waits for its red cue. The vectors fall
+   at 120 stem LEDs per second at half their former brightness, stop just above
+   the eight-LED blue anchor, and bounce back upward while fading to 5% of
+   full output at the top. Rising and falling vectors cross near the middle.
+   Rainbow sparks remain available in code but are out of the cycle.
 
 The button has software debounce and a 0.38-second multi-press window:
 
 | Gesture | Slot | Effect |
 | --- | --- | --- |
-| One quick press | a | Light descends, then leads a steady purple fill back up; orb flashes |
-| Two quick presses | b | Overlapping groups of three upward spirals; dull yellow orb flashes blue when each group arrives |
-| Medium press | c | Dimmer channel wave with a six-row dark gap, rotating eight times per second under a white orb |
-| Long press and hold | d | Slower upward lights and a brighter blue orb while held; release burst |
+| One quick press | a | Light descends, then leads a steady, dim red fill back up; orb flashes |
+| Two quick presses | b | Overlapping groups of three upward spirals; brighter yellow orb flashes blue when each group arrives |
+| Medium press | c | Dimmer channel wave with a six-row dark gap, rising at 56 rows per second and rotating four times per second under a white orb |
+| Long press and hold | d | Slower upward lights and a blue orb while held; release keeps the orb blue until the first burst vector arrives, then bright purple with rapid white flashes |
 | Quick press then medium press | e | Unset; top four stem pixels glow dim red briefly |
-| Quick press then long hold | f | Four-pixel bars drop and stack with the orb off; release unloads the bars under a rising white orb, then three flashes and a short white hold |
+| Quick press then long hold | f | Four-pixel bars drop and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
 
 Timings and slot assignments are in `wizard_staff/config.py` and
 `wizard_staff/controller.py`. Unset slots use the same red indicator.
@@ -67,8 +69,8 @@ the default four channels) at 100 vertical pixels per second. Each channel
 stacks up to ten bars, or 40 vertical pixels. Extra drops disappear when they
 reach the full stack. On release, in-flight drops clear and the stacks unload
 at 200 vertical pixels per second. The orb is off while dropping and ramps to
-bright white as the last bars rise. After
-unloading, it flashes three times and stays white for a quarter second. These
+bright white as the last bars rise. After unloading, it flashes three times,
+stays white for 0.4 seconds, and fades out over 150 ms. These
 three speeds, the bar length, and the stack limit are parameters of
 `StackingDropEffect`.
 

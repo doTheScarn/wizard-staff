@@ -14,6 +14,7 @@ from wizard_staff.controller import WizardStaff
 from wizard_staff.cycle_status import (CycleStatusDisplay, PATTERN_ROWS,
                                        format_status, status_snapshot)
 from wizard_staff.effects import (BASE_PATTERNS, BOUNCE_LEDS_PER_SECOND,
+                                  BOUNCE_PREFLASH_SECONDS,
                                   StackingDropEffect, base_vectors,
                                   manual_vectors)
 from wizard_staff.geometry import StaffGeometry
@@ -143,18 +144,36 @@ class WizardStaffTests(unittest.TestCase):
     def test_bouncing_base_starts_at_top_and_crosses_at_middle(self):
         geometry = StaffGeometry.from_config(StaffConfig())
         self.assertEqual(BASE_PATTERNS[-1], "bounce_vectors")
-        one_way = (len(geometry.stem) - 8) / BOUNCE_LEDS_PER_SECOND
+        one_way = (len(geometry.stem) - 16) / BOUNCE_LEDS_PER_SECOND
         at_start = base_vectors("bounce_vectors", 0.0, geometry)
-        self.assertEqual(len(at_start), 3)  # Blue anchor, orange/red orb, one drop.
-        self.assertEqual(at_start[-1].position, 0)
-        self.assertEqual(len(at_start[-1].samples), 8)
+        self.assertEqual(len(at_start), 2)  # Red cue comes before the first drop.
+        self.assertEqual(at_start[1].samples[0][1], (190, 28, 0))
         self.assertEqual(at_start[0].path, geometry.stem[-8:])
-        crossing = base_vectors("bounce_vectors", 1.5 * one_way, geometry)
+        launched = base_vectors("bounce_vectors", BOUNCE_PREFLASH_SECONDS, geometry)
+        self.assertEqual(launched[1].samples[0][1], (255, 100, 0))
+        self.assertEqual(launched[-1].position, 0)
+        self.assertEqual(len(launched[-1].samples), 8)
+        self.assertAlmostEqual(launched[-1].brightness_override, 0.2)
+        bounce = base_vectors("bounce_vectors", BOUNCE_PREFLASH_SECONDS + one_way,
+                              geometry)
+        self.assertEqual(bounce[-2].position, len(geometry.stem) - 16)
+        self.assertLess(bounce[-2].position + 7,
+                        len(geometry.stem) - 8)
+        crossing = base_vectors("bounce_vectors",
+                                BOUNCE_PREFLASH_SECONDS + 1.5 * one_way,
+                                geometry)
         self.assertEqual(len(crossing), 4)
         self.assertAlmostEqual(crossing[2].position, crossing[3].position)
         self.assertAlmostEqual(crossing[2].position,
-                               (len(geometry.stem) - 8) / 2)
+                               (len(geometry.stem) - 16) / 2)
         self.assertEqual(crossing[1].samples[0][1], (255, 100, 0))
+        self.assertLess(crossing[2].brightness_override,
+                        crossing[3].brightness_override)
+        near_top = base_vectors("bounce_vectors",
+                                BOUNCE_PREFLASH_SECONDS + 2 * one_way - 0.001,
+                                geometry)
+        self.assertAlmostEqual(near_top[2].brightness_override, 0.05,
+                               delta=0.001)
 
     def test_a_fill_retains_brightness_and_reverses_falling_head(self):
         geometry = StaffGeometry.from_config(StaffConfig())
@@ -162,6 +181,8 @@ class WizardStaffTests(unittest.TestCase):
         filling, _ = manual_vectors("descent_fill", 1.3, geometry)
         full, _ = manual_vectors("descent_fill", 2.6, geometry)
         self.assertEqual(filling[0].brightness, full[0].brightness)
+        self.assertEqual(filling[0].samples[0][1], (255, 0, 0))
+        self.assertEqual(filling[0].brightness, 0.4)
         self.assertLess(filling[0].brightness, falling[0].brightness)
         self.assertEqual([color for _, color in filling[1].samples],
                          [color for _, color in falling[0].samples])
@@ -178,19 +199,22 @@ class WizardStaffTests(unittest.TestCase):
         arrival, _ = manual_vectors("upward_spirals", 1.12, geometry)
         self.assertEqual(sum(vector.path == geometry.orb for vector in before), 1)
         self.assertEqual(sum(vector.path == geometry.orb for vector in arrival), 2)
+        self.assertEqual(early[0].brightness, 0.85)
 
     def test_c_dark_spacer_rotates_one_column_per_step(self):
         geometry = StaffGeometry.from_config(StaffConfig())
         first, _ = manual_vectors("channel_wave", 0.0, geometry)
-        rotated, _ = manual_vectors("channel_wave", 0.125, geometry)
+        halfway, _ = manual_vectors("channel_wave", 0.125, geometry)
+        rotated, _ = manual_vectors("channel_wave", 0.25, geometry)
         self.assertEqual(first[0].samples[0][1], (255, 255, 255))
         self.assertEqual(first[0].brightness_override, 0.5)
         self.assertEqual(first[1].path, geometry.channel(0))
+        self.assertEqual(halfway[1].path, geometry.channel(0))
         self.assertEqual(rotated[1].path, geometry.channel(1))
         self.assertTrue(all(row not in dict(first[1].samples) for row in range(6)))
         self.assertIn(6, dict(first[1].samples))
         self.assertTrue(all(row not in dict(rotated[1].samples)
-                            for row in range(14, 20)))
+                            for row in range(10, 16)))
         self.assertLessEqual(first[1].brightness, 0.4)
 
     def test_d_charge_is_slower_with_blue_orb(self):
@@ -202,6 +226,19 @@ class WizardStaffTests(unittest.TestCase):
         self.assertNotEqual(first[1].position, later[1].position)
         self.assertLess(abs(later[1].position - first[1].position),
                         len(geometry.stem))
+        held, _ = manual_vectors("charge", 5.0, geometry)
+        released, _ = manual_vectors("release_burst", 0.0, geometry,
+                                     charge_time=5.0)
+        self.assertEqual(released[0].samples, held[0].samples)
+        self.assertEqual(released[0].brightness, held[0].brightness)
+        before_arrival, _ = manual_vectors("release_burst", 0.7, geometry,
+                                           charge_time=5.0)
+        arrival_time = (len(geometry.stem) - 1) * 0.75 / len(geometry.stem)
+        at_arrival, _ = manual_vectors("release_burst", arrival_time + 0.03,
+                                       geometry, charge_time=5.0)
+        self.assertEqual(before_arrival[0].samples, held[0].samples)
+        self.assertEqual(at_arrival[0].samples[0][1], (170, 0, 220))
+        self.assertEqual(at_arrival[1].samples[0][1], (255, 255, 255))
 
     def test_button_debounce_single_double_medium_and_hold(self):
         config = StaffConfig()
@@ -307,7 +344,16 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(effect.unload_index, [0] * 4)
         vectors, _ = effect.vectors(7.16)
         frame = render(vectors, geometry.total_leds)
-        self.assertGreater(frame[0][0], 0)
+        self.assertEqual(frame[0], (0, 0, 0))  # Cubic ramp begins slowly.
+        duration = effect.unload_motion_end_at - effect.released_at
+        ramp_levels = []
+        for fraction in (0.25, 0.5, 0.75):
+            ramp = effect.vectors(effect.released_at + fraction * duration)[0]
+            ramp_levels.append(render(ramp, geometry.total_leds)[0][0])
+        self.assertLess(ramp_levels[1] - ramp_levels[0],
+                        ramp_levels[2] - ramp_levels[1])
+        frame = render(effect.vectors(effect.released_at + 0.5 * duration)[0],
+                       geometry.total_leds)
         self.assertEqual(frame[0][0], frame[0][1])
         self.assertEqual(frame[0][1], frame[0][2])
         vectors, _ = effect.vectors(effect.unload_motion_end_at - 0.01)
@@ -321,6 +367,12 @@ class WizardStaffTests(unittest.TestCase):
                                 geometry.total_leds)[0], (128, 128, 128))
         self.assertEqual(render(effect.vectors(effect.unload_motion_end_at + 0.40)[0],
                                 geometry.total_leds)[0], (128, 128, 128))
+        self.assertEqual(render(effect.vectors(effect.unload_motion_end_at + 0.75)[0],
+                                geometry.total_leds)[0], (128, 128, 128))
+        fade_frame = render(effect.vectors(effect.unload_motion_end_at + 0.83)[0],
+                            geometry.total_leds)
+        self.assertGreater(fade_frame[0][0], 0)
+        self.assertLess(fade_frame[0][0], 128)
         for dark, flash in ((0.02, 0.08), (0.14, 0.20), (0.26, 0.32)):
             dark_frame = render(effect.vectors(effect.unload_motion_end_at + dark)[0],
                                 geometry.total_leds)

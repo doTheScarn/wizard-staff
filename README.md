@@ -7,12 +7,13 @@ vertical-channel vectors. There is no IMU or motion compensation.
 
 ## Layout
 
-The current defaults in `main.py` are 300 LEDs total: 36 in the orb and 264 on
-the stem, with 4 LEDs per wrap. Logical indices 36, 40, 44, ... are one
-vertical channel; 37, 41, 45, ... are the next. This accounts for 66 complete
-four-LED wraps. The rendering model numbers the orb first and the stem from
+The current defaults in `main.py` are 300 LEDs total: 31 in the orb and 269 on
+the stem, with 4 LEDs per wrap. Logical indices 31, 35, 39, ... are one
+vertical channel; 32, 36, 40, ... are the next. This accounts for 67 complete
+four-LED wraps plus one stem LED. The rendering model numbers the orb first and
+the stem from
 top to bottom. `DATA_START = "bottom"` reverses each frame for a strand whose
-physical LED 0 is at the bottom; the orb occupies physical LEDs 264–299. Set
+physical LED 0 is at the bottom; the orb occupies physical LEDs 269–299. Set
 `--data-start top` for a strand whose data input is at the orb.
 `turns_per_repeat=1` means those four positions occur in each full turn. If
 the physical wrap repeats only every two turns, set `turns_per_repeat=2` and
@@ -74,8 +75,23 @@ On a development computer, no Pi packages are needed:
 ```bash
 python main.py --dry-run --seconds 10
 python main.py --dry-run --seconds 5 --effect quick
+python main.py --dry-run --virtual-button cycle
+python main.py --dry-run --virtual-button input
 python -m unittest discover -s tests -v
 ```
+
+`--virtual-button` replaces GPIO button input while keeping the normal gesture
+classifier. In `input` mode, type a letter or digit followed by Enter:
+`a`/`1` = one quick press, `b`/`2` = two quick presses, `c`/`3` = medium press,
+`d`/`4` = long hold, `e`/`5` = quick then medium (unset), and `f`/`6` = quick
+then long hold. Type `q` to quit. Commands entered while an effect is running
+are queued. Hold gestures stay active for about five seconds before release.
+In `cycle` mode the six gestures repeat in that order. After each triggered
+effect finishes, the base pattern cycle plays for five seconds before the next
+gesture. The terminal display updates in place, showing the active pattern and
+a countdown beside its entry in the full pattern list. Cycle mode uses this
+display in place of the dry-run LED preview. Either mode can drive the real LEDs
+without a wired button by omitting `--dry-run`.
 
 On the Raspberry Pi, connect the strip data line
 to the configured NeoPixel pin (default `D18`), and wire a normally-open

@@ -58,6 +58,7 @@ class StackingDropEffect:
         self.unload_started_at = [0.0 for _ in self.paths]
         self.unload_flashed = [False for _ in self.paths]
         self.flash_until = 0.0
+        self.unload_finish_at = None
 
     def _advance_drops(self, elapsed):
         while self.drop_count / self.drop_rate <= elapsed:
@@ -101,6 +102,14 @@ class StackingDropEffect:
                 for level, color in reversed(list(enumerate(self.stacks[channel])))
             ]
             self.unload_started_at[channel] = elapsed
+        self.unload_finish_at = elapsed
+        for queue in self.unloading:
+            next_start = elapsed
+            for top, _ in queue:
+                arrival = next_start + top / self.rise_speed
+                next_start += (top + self.vector_length) / self.rise_speed
+                self.unload_finish_at = max(self.unload_finish_at,
+                                            next_start, arrival + 0.08)
 
     def vectors(self, elapsed):
         if self.released_at is None:

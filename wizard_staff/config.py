@@ -3,8 +3,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class StaffConfig:
-    orb_leds: int = 36
-    stem_leds: int = 264
+    orb_leds: int = 31
+    stem_leds: int = 269
     leds_per_repeat: int = 4
     turns_per_repeat: int = 1
     frame_rate: float = 60.0

@@ -1,14 +1,19 @@
 """Run Wizard Staff on a Raspberry Pi or preview it without hardware."""
 
 import argparse
+from queue import Empty, Queue
+import sys
+import threading
 import time
 
 from wizard_staff.config import StaffConfig
 from wizard_staff.controller import WizardStaff
+from wizard_staff.cycle_status import CycleStatusDisplay
+from wizard_staff.virtual_button import VIRTUAL_GESTURES, VirtualButtonPlayer
 
 
 TOTAL_LEDS = 300
-ORB_LEDS = 36
+ORB_LEDS = 31
 LEDS_PER_WRAP = 4
 STEM_LEDS = TOTAL_LEDS - ORB_LEDS
 BASELINE_SHAFT_BRIGHTNESS = 0.2
@@ -32,6 +37,9 @@ def parse_args():
     parser.add_argument("--color-mapping", choices=("tire_pixel", "standard"),
                         default="tire_pixel")
     parser.add_argument("--button-gpio", type=int, default=17)
+    parser.add_argument("--virtual-button", choices=("cycle", "input"),
+                        help="Simulate button gestures automatically or from terminal input; "
+                             "overrides the GPIO button.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--report-fps", action="store_true",
                         help="Print measured frame rate and update time every 2 seconds.")
@@ -41,7 +49,10 @@ def parse_args():
                                               "hold_start", "quick_medium",
                                               "quick_hold_start"),
                         help="Start a slot immediately; useful with --dry-run.")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.effect and args.virtual_button:
+        parser.error("--effect and --virtual-button cannot be used together")
+    return args
 
 
 def preview(frame, orb_leds):
@@ -50,6 +61,13 @@ def preview(frame, orb_leds):
     glyphs = " .:-=+*#%@"
     line = "".join(glyphs[min(len(glyphs) - 1, sum(pixel) // 65)] for pixel in stem)
     return f"orb={orb} stem={line}"
+
+
+def read_virtual_commands(commands):
+    """Read terminal lines without blocking the LED update loop."""
+    for line in sys.stdin:
+        commands.put(line.strip())
+    commands.put(None)
 
 
 def main():
@@ -65,10 +83,22 @@ def main():
                          pixel_order=args.pixel_order,
                          color_mapping=args.color_mapping, button_gpio=args.button_gpio)
     staff = WizardStaff(config)
+    virtual_button = (VirtualButtonPlayer(config, args.virtual_button)
+                      if args.virtual_button else None)
+    cycle_status = (CycleStatusDisplay(sys.stdout)
+                    if args.virtual_button == "cycle" else None)
+    commands = Queue() if args.virtual_button == "input" else None
+    if commands is not None:
+        mapping = ", ".join(f"{key}/{index}: {label}" for index, (key, label)
+                            in enumerate(VIRTUAL_GESTURES, start=1))
+        print(f"Virtual button commands: {mapping}. Type q to quit.", flush=True)
+        threading.Thread(target=read_virtual_commands, args=(commands,),
+                         daemon=True).start()
     hardware = None
     if not args.dry_run:
         from wizard_staff.hardware import PiHardware
-        hardware = PiHardware(config, staff.geometry.total_leds)
+        hardware = PiHardware(config, staff.geometry.total_leds,
+                              enable_button=virtual_button is None)
 
     start = time.monotonic()
     if args.effect:
@@ -79,14 +109,41 @@ def main():
     report_frames = 0
     report_work_s = 0.0
     report_max_work_s = 0.0
+    report_text = "" if cycle_status is not None and args.report_fps else None
+    quit_requested = False
     try:
-        while args.seconds is None or time.monotonic() - start < args.seconds:
+        while (not quit_requested and
+               (args.seconds is None or time.monotonic() - start < args.seconds)):
             now = time.monotonic()
+            if commands is not None:
+                while True:
+                    try:
+                        command = commands.get_nowait()
+                    except Empty:
+                        break
+                    if command is None:
+                        if args.seconds is None:
+                            quit_requested = True
+                        break
+                    if command.lower() == "q":
+                        quit_requested = True
+                        break
+                    if not virtual_button.enqueue(command):
+                        print(f"Unknown virtual button: {command!r}", flush=True)
+            if quit_requested:
+                break
             work_started = time.perf_counter() if args.report_fps else None
-            frame = staff.step(now, hardware.is_pressed() if hardware else False)
+            if virtual_button is not None:
+                pressed = virtual_button.tick(now, staff.effect is not None)
+                if cycle_status is None:
+                    for announcement in virtual_button.announcements:
+                        print(announcement, flush=True)
+            else:
+                pressed = hardware.is_pressed() if hardware else False
+            frame = staff.step(now, pressed)
             if hardware:
                 hardware.show(frame)
-            elif now >= next_preview:
+            elif cycle_status is None and now >= next_preview:
                 print(preview(frame, config.orb_leds))
                 next_preview = now + 0.25
             if args.report_fps:
@@ -97,13 +154,19 @@ def main():
                 report_max_work_s = max(report_max_work_s, work_s)
                 report_elapsed = finished_at - report_start
                 if report_elapsed >= 2.0:
-                    print(f"fps={report_frames / report_elapsed:.1f} "
-                          f"update_avg_ms={report_work_s / report_frames * 1000:.2f} "
-                          f"update_max_ms={report_max_work_s * 1000:.2f}", flush=True)
+                    summary = (f"fps={report_frames / report_elapsed:.1f} "
+                               f"update_avg_ms={report_work_s / report_frames * 1000:.2f} "
+                               f"update_max_ms={report_max_work_s * 1000:.2f}")
+                    if cycle_status is not None:
+                        report_text = summary
+                    else:
+                        print(summary, flush=True)
                     report_start = finished_at
                     report_frames = 0
                     report_work_s = 0.0
                     report_max_work_s = 0.0
+            if cycle_status is not None:
+                cycle_status.update(staff, virtual_button, now, report_text)
             next_frame += 1 / config.frame_rate
             time.sleep(max(0, next_frame - time.monotonic()))
     except KeyboardInterrupt:

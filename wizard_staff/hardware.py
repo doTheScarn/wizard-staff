@@ -9,24 +9,29 @@ def encode_color(color, mapping):
 
 
 class PiHardware:
-    def __init__(self, config, total_leds):
+    def __init__(self, config, total_leds, enable_button=True):
         import board
         import neopixel
-        import RPi.GPIO as GPIO
 
         pin = getattr(board, config.led_pin)
         order = getattr(neopixel, config.pixel_order)
         self.strip = neopixel.NeoPixel(pin, total_leds, brightness=config.brightness,
                                       auto_write=False, pixel_order=order)
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(config.button_gpio, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        self.gpio = GPIO
+        self.gpio = None
+        if enable_button:
+            import RPi.GPIO as GPIO
+
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(config.button_gpio, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            self.gpio = GPIO
         self.button_gpio = config.button_gpio
         self.color_mapping = config.color_mapping
         self.data_start = config.data_start
         self.total_leds = total_leds
 
     def is_pressed(self):
+        if self.gpio is None:
+            return False
         return self.gpio.input(self.button_gpio) == self.gpio.LOW
 
     def show(self, frame):
@@ -39,6 +44,7 @@ class PiHardware:
     def close(self):
         self.strip.fill((0, 0, 0))
         self.strip.show()
-        self.gpio.cleanup(self.button_gpio)
+        if self.gpio is not None:
+            self.gpio.cleanup(self.button_gpio)
         self.strip.deinit()
 

@@ -14,4 +14,5 @@ The remaining LEDs run down the pole in a helix. There is no IMU or wheel frame.
   red/green swap and RGB pixel order used by tire-pixel; both are configurable.
 - Hardware imports belong in the output/input adapters so simulation and tests
   work on computers without Raspberry Pi packages.
+- Use LF line endings for project text files; do not introduce CRLF.
 

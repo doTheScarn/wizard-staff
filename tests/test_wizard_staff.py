@@ -14,10 +14,10 @@ from wizard_staff.controller import WizardStaff
 from wizard_staff.cycle_status import (CycleStatusDisplay, PATTERN_ROWS,
                                        format_status, status_snapshot)
 from wizard_staff.effects import (BASE_PATTERNS, BOUNCE_LEDS_PER_SECOND,
-                                  BOUNCE_FLASH_DELAY_SECONDS,
+                                  BOUNCE_FLASH_DELAY_SECONDS, STACK_COLORS,
                                   StackingDropEffect, base_vectors,
                                   manual_vectors, opposed_pair_vectors,
-                                  opposed_pair_clear_time)
+                                  opposed_pair_clear_time, descent_fill_timing)
 from wizard_staff.geometry import StaffGeometry
 from wizard_staff.hardware import PiHardware, encode_color
 from wizard_staff.motion import downward_acceleration, time_to_position
@@ -66,7 +66,7 @@ class WizardStaffTests(unittest.TestCase):
 
         staff = WizardStaff(StaffConfig(orb_leds=1, stem_leds=8))
         staff.trigger("quick", 0.0)
-        self.assertEqual(max(staff.step(3.05)[0]), 16)
+        self.assertEqual(max(staff.step(3.05)[0]), 89)
 
     def test_gamma_corrects_before_addition_and_preserves_output_multipliers(self):
         dim = solid((0,), (255, 0, 0), 0.5, brightness_override=0.5)
@@ -189,19 +189,19 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(len(launched[-1].samples), 8)
         self.assertAlmostEqual(launched[-1].brightness_override, 0.2)
         bounce = base_vectors("bounce_vectors", one_way, geometry)
-        self.assertEqual(bounce[-2].position, len(geometry.stem) - 16)
-        self.assertLess(bounce[-2].position + 7,
+        self.assertEqual(bounce[-1].position, len(geometry.stem) - 16)
+        self.assertLess(bounce[-1].position + 7,
                         len(geometry.stem) - 8)
         crossing = base_vectors("bounce_vectors",
-                                1.5 * one_way,
+                                1.5 * one_way + 0.05,
                                 geometry)
         self.assertEqual(len(crossing), 4)
         self.assertAlmostEqual(crossing[2].position, crossing[3].position)
         self.assertAlmostEqual(crossing[2].position,
-                               (len(geometry.stem) - 16) / 2)
+                               (len(geometry.stem) - 16) / 2 - 6)
         self.assertEqual(crossing[1].samples[0][1], (255, 100, 0))
-        self.assertEqual(crossing[2].brightness_override,
-                         crossing[3].brightness_override)
+        self.assertLess(crossing[2].brightness_override,
+                        crossing[3].brightness_override)
         near_top = base_vectors("bounce_vectors",
                                 2 * one_way - 0.001,
                                 geometry)
@@ -215,14 +215,64 @@ class WizardStaffTests(unittest.TestCase):
             acceleration = downward_acceleration(level, 4)
             fall = time_to_position(0, bottom, BOUNCE_LEDS_PER_SECOND,
                                     acceleration, direction=1)
-            crossing = base_vectors("bounce_vectors", 1.5 * fall, geometry,
+            interval = fall + 0.1
+            impact_speed = BOUNCE_LEDS_PER_SECOND + acceleration * fall
+            crossing_at = (bottom + impact_speed * fall + 0.5 * acceleration * fall ** 2 +
+                           BOUNCE_LEDS_PER_SECOND * interval -
+                           0.5 * acceleration * interval ** 2) / (
+                               impact_speed + BOUNCE_LEDS_PER_SECOND +
+                               acceleration * (fall - interval))
+            crossing = base_vectors("bounce_vectors", crossing_at, geometry,
                                     options=options)[2:]
             self.assertEqual(len(crossing), 2)
             self.assertAlmostEqual(crossing[0].position, crossing[1].position)
+            self.assertTrue(0.3 * bottom < crossing[0].position < 0.6 * bottom)
+            self.assertLess(crossing[0].brightness_override,
+                            crossing[1].brightness_override)
             near_top = base_vectors("bounce_vectors", 2 * fall - 0.05,
                                     geometry, options=options)[2:]
             self.assertLess(near_top[0].position, 10)
-            self.assertGreater(near_top[0].brightness_override, 0.03)
+            self.assertGreater(near_top[0].brightness_override, 0.01)
+            # The older light is gone for 0.2 s before its replacement drops;
+            # the other light continues, preserving two interleaved flights.
+            for offset in (0.001, 0.1, 0.199):
+                waiting = base_vectors("bounce_vectors", 2 * fall + offset,
+                                       geometry, options=options)[2:]
+                self.assertEqual(len(waiting), 1)
+            relaunched = base_vectors("bounce_vectors", 2 * interval + 0.001,
+                                      geometry, options=options)[2:]
+            self.assertEqual(len(relaunched), 2)
+            self.assertLess(relaunched[-1].position, 1)
+            baseline = base_vectors("bounce_vectors", 0, geometry, options=options)
+            impact = base_vectors("bounce_vectors", fall, geometry, options=options)
+            base_frame = render([baseline[0]], geometry.total_leds, gamma=2.2)
+            hit_frame = render([impact[0]], geometry.total_leds, gamma=2.2)
+            anchor = geometry.stem[-1]
+            self.assertGreater(hit_frame[anchor][1], 3 * base_frame[anchor][1])
+
+    def test_two_wrap_base_lights_and_balanced_stack_colors(self):
+        for turns in (1, 2):
+            geometry = StaffGeometry.from_config(StaffConfig(turns_per_repeat=turns))
+            vectors = base_vectors("green_spiral", 0.5, geometry)
+            self.assertEqual(len(vectors[1].samples), 8 // turns)
+        effect = StackingDropEffect(geometry, rng=random.Random(5))
+        colors = []
+        for index in range(16):
+            effect.vectors(index / effect.drop_rate + 0.001)
+            colors.append(effect.last_color)
+        self.assertEqual(set(colors[:8]), set(STACK_COLORS))
+        self.assertEqual(set(colors[8:]), set(STACK_COLORS))
+        self.assertTrue(all(a != b for a, b in zip(colors, colors[1:])))
+
+    def test_opposed_pairs_keep_original_overlap_through_button_mapping(self):
+        from wizard_staff.patterns import PATTERN_OPTIONS
+        options = PATTERN_OPTIONS["quick_medium"]
+        self.assertNotIn("downward_acceleration", options)
+        vectors, done = manual_vectors("opposed_pairs", 0.55,
+                                       StaffGeometry.from_config(StaffConfig()),
+                                       options=options)
+        self.assertFalse(done)
+        self.assertEqual(len(vectors), 4)
 
     def test_base_acceleration_is_enabled_for_selected_patterns(self):
         from wizard_staff.patterns import BASE_PATTERN_OPTIONS
@@ -319,6 +369,31 @@ class WizardStaffTests(unittest.TestCase):
         self.assertGreater(filling[1].position,
                            manual_vectors("descent_fill", 1.4, geometry)[0][1].position)
 
+    def test_a_red_boundary_tracks_ring_with_or_without_acceleration(self):
+        from wizard_staff.patterns import PATTERN_OPTIONS
+        self.assertNotIn("downward_acceleration", PATTERN_OPTIONS["quick"])
+        for size in (12, 269):
+            geometry = StaffGeometry.from_config(StaffConfig(stem_leds=size))
+            for level in ("off", "low", "med", "high"):
+                options = {"downward_acceleration": level}
+                fall_s, fill_s = descent_fill_timing(geometry, options)
+                acceleration = downward_acceleration(level, 4)
+                age = fall_s * 0.5
+                falling, _ = manual_vectors("descent_fill", age, geometry,
+                                             options=options)
+                self.assertAlmostEqual(falling[-1].position,
+                                       -1 + (size + 2) * age +
+                                       0.5 * acceleration * age ** 2)
+                for step in range(1, 20):
+                    vectors, finished = manual_vectors(
+                        "descent_fill", fall_s + fill_s * step / 20,
+                        geometry, options=options)
+                    self.assertFalse(finished)
+                    ring = vectors[-1]
+                    boundary = max(0, min(size, int(ring.position // 1) + 1))
+                    red_path = vectors[0].path if len(vectors) > 1 else ()
+                    self.assertEqual(red_path, geometry.stem[boundary:])
+
     def test_b_groups_overlap_and_orb_flashes_only_on_arrival(self):
         geometry = StaffGeometry.from_config(StaffConfig())
         early, _ = manual_vectors("upward_spirals", 0.70, geometry)
@@ -346,8 +421,23 @@ class WizardStaffTests(unittest.TestCase):
         hit, _ = manual_vectors("gathering_spell", arrival, geometry)
         self.assertFalse(any(v.path == geometry.orb for v in before))
         self.assertTrue(any(v.path == geometry.orb for v in hit))
-        self.assertEqual(manual_vectors("gathering_spell", 4.1, geometry),
+        self.assertEqual(manual_vectors("gathering_spell",
+                                         SPELL_DURATIONS["gathering_spell"] - 0.05,
+                                         geometry),
                          ([], False))  # A dark rest before returning to base.
+
+    def test_gathering_repeats_tightly_spaced_phrase_with_strong_final_shots(self):
+        self.assertEqual(len(GATHERING_LAUNCHES), 6)
+        for offset in (0, 3):
+            phrase = GATHERING_LAUNCHES[offset:offset + 3]
+            self.assertAlmostEqual(phrase[1][0] - phrase[0][0], 0.5 / 2.5)
+            self.assertAlmostEqual(phrase[2][0] - phrase[1][0], 1.15 / 2.5)
+            geometry = StaffGeometry.from_config(StaffConfig())
+            vectors, done = manual_vectors("gathering_spell", phrase[-1][0] + 1.05,
+                                           geometry)
+            self.assertFalse(done)
+            self.assertTrue(any(v.path == geometry.stem and len(v.samples) == 32
+                                and v.brightness == 1.0 for v in vectors))
 
     def test_new_spells_run_via_virtual_gestures_and_finish_on_small_geometry(self):
         for turns in (1, 2):

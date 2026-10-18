@@ -23,6 +23,7 @@ CHANNEL_ROTATIONS_PER_SECOND = 1.0
 CHANNEL_WAVE_ROWS_PER_SECOND = 56.0
 CHANNEL_WAVE_PERIOD_ROWS = 24
 CHANNEL_WAVE_DARK_ROWS = 6
+BOUNCE_RETURN_GAP_SECONDS = 0.2
 BOUNCE_FLASH_SECONDS = 0.1
 # Kept as an alias for callers that imported the former timing constant.
 BOUNCE_FLASH_DELAY_SECONDS = BOUNCE_FLASH_SECONDS
@@ -102,6 +103,8 @@ class StackingDropEffect:
         self.stacks = [[] for _ in self.paths]  # Bottom to top, by color.
         self.falling = []
         self.drop_count = 0
+        self.color_bag = []
+        self.last_color = None
         self.released_at = None
         self.unloading = [[] for _ in self.paths]  # Top to bottom: (top row, color).
         self.unload_index = [0 for _ in self.paths]
@@ -119,8 +122,15 @@ class StackingDropEffect:
                 drop.will_stack for drop in self.falling if drop.channel == channel)
             capacity = min(self.max_stack_vectors, len(path) // self.vector_length)
             level = min(reserved, max(0, capacity - 1))
+            if not self.color_bag:
+                self.color_bag = list(STACK_COLORS)
+                self.rng.shuffle(self.color_bag)
+                if self.color_bag[-1] == self.last_color:
+                    self.color_bag[0], self.color_bag[-1] = (
+                        self.color_bag[-1], self.color_bag[0])
+            self.last_color = self.color_bag.pop()
             self.falling.append(FallingBar(
-                channel, self.rng.choice(STACK_COLORS),
+                channel, self.last_color,
                 spawned_at,
                 len(path) - 1 - level * self.vector_length,
                 reserved < capacity))
@@ -530,13 +540,14 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
             count = len(geometry.stem)
             launches = []
             start = -3.0
+            tail_length = _spiral_tail_length(geometry)
             if acceleration:
                 flight_s = time_to_position(
-                    start, count + 2, SPIRAL_LEDS_PER_SECOND, acceleration,
+                    start, count + tail_length - 1, SPIRAL_LEDS_PER_SECOND, acceleration,
                     direction=1)
             else:
-                flight_s = (count + 5) / SPIRAL_LEDS_PER_SECOND
-            flight_s = flight_s or (count + 5) / SPIRAL_LEDS_PER_SECOND
+                flight_s = (count + tail_length + 2) / SPIRAL_LEDS_PER_SECOND
+            flight_s = flight_s or (count + tail_length + 2) / SPIRAL_LEDS_PER_SECOND
             for index in range(3):
                 launch_at = index * flight_s / 3
                 age = t - launch_at
@@ -552,7 +563,8 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
                 depth = max(0.0, min(1.0, position / count))
                 vectors.append(palette_trail(
                     geometry.stem, ((255, 255, 255), (225, 245, 235), (120, 150, 140)),
-                    position, length=5, brightness=0.8 * (1 - 0.75 * depth)))
+                    position, length=tail_length,
+                    brightness=0.8 * (1 - 0.75 * depth)))
         else:
             stride = max(1, geometry.leds_per_repeat // 4)
             selected = range(0, geometry.leds_per_repeat, stride)
@@ -599,13 +611,16 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
             else:
                 rise_s = impact_speed / acceleration + 0.2
         flight_s = fall_s + (rise_s or 0.0) if acceleration else 2 * travel_s
-        cycle_s = max(0.2, flight_s / 2)
+        # Two interleaved flights: the vector two launches back finishes
+        # its rise 0.2 seconds before this launch, while the newer one stays.
+        cycle_s = (flight_s + BOUNCE_RETURN_GAP_SECONDS) / 2
         impact_age = (t - fall_s) % cycle_s
         impact = (max(0.0, 1 - impact_age / 0.22) ** 2
                   if t >= fall_s and bottom else 0.0)
         anchor_color = palette_color(((0, 180, 20), (145, 255, 90)), impact)
         vectors.append(solid(stem[-length:], anchor_color,
-                             0.55 + 0.35 * impact))
+                             0.55 + 0.45 * impact,
+                             brightness_override=max_brightness))
         current_launch = int(t // cycle_s)
         phase = t - current_launch * cycle_s
         flash_active = (BOUNCE_FLASH_SECONDS <= phase <
@@ -643,7 +658,7 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
                 scale = fall_scale
             else:
                 progress = vector_position / bottom
-                scale = fall_scale * min(1.0, max(0.0, progress / 0.18)) ** 0.5
+                scale = fall_scale * max(0.0, progress) ** 0.65
             vectors.append(LightVector(
                 stem, tuple((offset, (255, 255, 255)) for offset in range(length)),
                 vector_position, brightness=fade,
@@ -755,19 +770,18 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
         if elapsed < fall_s:
             head = (-1 + elapsed / fall_s * (len(stem) + 2)
                     if not acceleration else
-                    motion_position(-1, (len(stem) + 2) / fall_s,
+                    motion_position(-1, (len(stem) + 2) / DESCENT_FALL_SECONDS,
                                     acceleration, elapsed))
             return [palette_trail(stem, MIST_PALETTE, head, length=6)], False
         if elapsed < fall_s + fill_s:
             fraction = (elapsed - fall_s) / fill_s
-            lit = min(len(stem), math.ceil(fraction * len(stem)))
             head = (len(stem) - 1 - fraction * (len(stem) - 1)
                     if not acceleration else
                     motion_position(len(stem) - 1,
-                                    -(len(stem) - 1) / fill_s,
+                                    -(len(stem) - 1) / DESCENT_FILL_SECONDS,
                                     acceleration, elapsed - fall_s))
             fill_age = elapsed - fall_s
-            fill_speed = -(len(stem) - 1) / fill_s
+            fill_speed = -(len(stem) - 1) / DESCENT_FILL_SECONDS
             fill_arrival = (time_to_position(len(stem) - 1, -1, fill_speed,
                                              acceleration, direction=-1)
                             if acceleration else fill_s)
@@ -776,7 +790,11 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
             if acceleration and not allow_reversal and fill_arrival is None:
                 fade = max(0.0, 1 - (fill_age - abs(fill_speed) /
                                      acceleration) / 0.2)
-            vectors = [solid(stem[-lit:], (255, 0, 0), 0.4)] if lit else []
+            # The red boundary follows the same position as the leading ring.
+            # Fill only pixels behind it, including during accelerated motion.
+            first_red = max(0, min(len(stem), math.floor(head) + 1))
+            vectors = ([solid(stem[first_red:], (255, 0, 0), 0.4)]
+                       if first_red < len(stem) else [])
             vectors.append(palette_trail(stem, MIST_PALETTE, head,
                                          length=6, direction=fill_direction,
                                          brightness=fade))

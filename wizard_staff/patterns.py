@@ -12,15 +12,13 @@ BASE_PATTERN_OPTIONS = {
 
 
 PATTERN_OPTIONS = {
-    "quick": {"sequence": ("short",), "effect": "descent_fill",
-              "downward_acceleration": "high"},
+    "quick": {"sequence": ("short",), "effect": "descent_fill"},
     "medium": {"sequence": ("medium",), "effect": "channel_wave",
                "extend_on_hold": True},
     "double_quick": {"sequence": ("short", "short"),
                      "effect": "upward_spirals", "extend_on_hold": True},
     "quick_medium": {"sequence": ("short", "medium"),
-                     "effect": "opposed_pairs", "extend_on_hold": True,
-                     "downward_acceleration": "high"},
+                     "effect": "opposed_pairs", "extend_on_hold": True},
     "medium_quick": {"sequence": ("medium", "short"),
                      "effect": "twisting_ribbons"},
     "double_medium": {"sequence": ("medium", "medium"),

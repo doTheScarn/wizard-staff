@@ -8,9 +8,19 @@ from .vectors import LightVector, palette_trail, solid
 EMBER_PALETTE = ((255, 205, 80), (255, 45, 0), (100, 0, 8))
 MIST_PALETTE = ((210, 245, 255), (15, 155, 255), (45, 8, 120))
 RED_PALETTE = ((255, 32, 5), (255, 0, 0), (65, 0, 15))
-SPELL_DURATIONS = {"twisting_ribbons": 5.0, "gathering_spell": 4.2}
-GATHERING_LAUNCHES = ((0.3, 0.55), (0.8, 0.65), (1.95, 1.0))
+GATHERING_PHRASE = tuple((started / 2.5, strength) for started, strength in
+                         ((0.3, 0.55), (0.8, 0.65), (1.95, 1.0)))
+GATHERING_REPEAT_SECONDS = GATHERING_PHRASE[-1][0] + 0.2
+GATHERING_LAUNCHES = tuple(
+    (started + repeat * GATHERING_REPEAT_SECONDS, strength)
+    for repeat in range(2) for started, strength in GATHERING_PHRASE)
 GATHERING_TRAVEL_SECONDS = 1.3
+GATHERING_FLASH_SECONDS = 0.6
+SPELL_DURATIONS = {
+    "twisting_ribbons": 5.0,
+    "gathering_spell": (GATHERING_LAUNCHES[-1][0] + GATHERING_TRAVEL_SECONDS +
+                        GATHERING_FLASH_SECONDS + 0.15),
+}
 
 
 def _smooth(value):
@@ -53,7 +63,7 @@ def twisting_ribbons(elapsed, geometry, max_brightness):
 
 
 def gathering_spell(elapsed, geometry, max_brightness):
-    """Two smaller channel launches, a pause, then a stronger spiral arrival."""
+    """Repeat a tightly spaced small/small/strong channel-to-spiral phrase twice."""
     if elapsed >= SPELL_DURATIONS["gathering_spell"]:
         return [], True
     stem = geometry.stem
@@ -75,7 +85,7 @@ def gathering_spell(elapsed, geometry, max_brightness):
             progress = age / GATHERING_TRAVEL_SECONDS
             head = (len(stem) - 1) * (1 - progress)
             blend = _smooth((progress - 0.3) / 0.45)
-            tail_wraps = 8 if launch_number == 2 else 4
+            tail_wraps = 8 if launch_number % 3 == 2 else 4
             tail_length = max(1, round(tail_wraps * units_per_wrap))
             for channel in source_channels:
                 vectors.append(palette_trail(
@@ -88,9 +98,9 @@ def gathering_spell(elapsed, geometry, max_brightness):
                 stem, MIST_PALETTE, head, length=tail_length, direction=-1,
                 brightness=strength * blend,
                 brightness_override=max_brightness))
-        flash_age = age - GATHERING_TRAVEL_SECONDS
-        if 0 <= flash_age < 0.6:
-            orb_level = max(orb_level, strength * (1 - flash_age / 0.6) ** 2)
+        flash_age = elapsed - (started + GATHERING_TRAVEL_SECONDS)
+        if 0 <= flash_age < GATHERING_FLASH_SECONDS:
+            orb_level = max(orb_level, strength * (1 - flash_age / GATHERING_FLASH_SECONDS) ** 2)
     if orb_level:
         vectors.append(solid(geometry.orb, (100, 205, 255), orb_level,
                              brightness_override=max_brightness))

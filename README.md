@@ -57,7 +57,7 @@ turn is handled automatically.
 Without virtual-button selection, the base patterns cycle every 18 seconds:
 
 1. A gently pulsing green orb with a brief white accent at each launch, and
-   near-white palette tails that each enter from above the top and fall
+   near-white, two-wrap palette tails that each enter from above the top and fall
    along the helix at 48 stem LEDs per second with low downward acceleration.
 2. The same orb and launch accent with lights falling along vertical channels
    at 9.6 vertical LEDs per second.
@@ -65,10 +65,11 @@ Without virtual-button selection, the base patterns cycle every 18 seconds:
    eight-LED vectors start falling at 120 stem LEDs per second and reflect
    just above the anchor. Downward acceleration is high (6 physical wraps/s²);
    the vector reflects with the same speed and gravity slows it as it rises.
-   Two vectors overlap and cross near the middle. Rising vectors stay
-   visible until the final 18% of the climb, then fade to zero at the top.
-   Each launch has a red orb cue 100 ms later; the green anchor has a brighter
-   steady glow.
+   Two vectors overlap and cross near the middle. Rising vectors gradually
+   dim throughout their climb and disappear at the top. Each returning vector
+   has been absent for 200 ms when its replacement launches, while the other
+   vector continues. Each launch has a red orb cue 100 ms later; the green
+   anchor has a brighter steady glow and a pronounced reflection pulse.
    Rainbow sparks remain available in code but are out of the cycle.
 
 The button has software debounce and a 0.38-second multi-press window:
@@ -80,10 +81,10 @@ The button has software debounce and a 0.38-second multi-press window:
 | Medium press | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating one column per second under a subdued white orb |
 | Long press and hold | d | Slower upward lights and a blue orb while held; release keeps the orb blue until the first burst vector arrives, then bright purple with rapid white flashes |
 | Quick press then medium press | e | Alternating blue and green pairs with bright leading edges and dim 30-wrap tails launch from the center toward both ends twice per second; orb stays dark |
-| Quick press then long hold | f | Four-pixel bars in eight familiar saturated colors drop and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
+| Quick press then long hold | f | Four-pixel bars cycle through all eight familiar saturated colors in shuffled order before repeating, and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
 | Three quick presses | g | Interactive red shots with a warm head and red-to-crimson fading tail; short presses shoot and a long hold exits |
 | Medium then quick press | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds |
-| Two medium presses | i | Two smaller channel launches, a pause, then a stronger launch; trails merge into a spiral and the orb responds on each arrival; 4.2 seconds |
+| Two medium presses | i | Two quick small/small/strong triplets, with launch spacing reduced by 2.5�; trails merge into a spiral and the orb responds on arrival; about 3.8 seconds |
 
 The button interpreter defines the following short/medium sequences. Unassigned
 sequences show the brief red unset indicator:
@@ -166,11 +167,13 @@ button by omitting `--dry-run`.
 The optional `downward_acceleration` value in `wizard_staff/patterns.py` is
 `low`, `med`, or `high`, meaning 2, 4, or 6 physical wraps/s². Omitting it (or
 setting it to `off`) preserves the original motion. Low acceleration is
-used by the green spiral and bouncing base patterns. Patterns a (descent fill)
-and e (opposed pairs) use high acceleration as experiments; the remaining
-mappings omit acceleration. Bouncing vectors overlap and cross near the middle,
-with a 100 ms red orb cue beginning 100 ms after each launch. Their rising fade
-is concentrated near the top. The optional `allow_reversal` mapping field
+used by the green spiral and bouncing base patterns. Pattern a (descent fill)
+uses steady motion so its leading ring and red fill stay aligned. The red
+boundary is derived from the ring position even if acceleration is enabled.
+Pattern e retains its original motion
+and two-pair-per-second launch cadence; the remaining mappings omit acceleration. Bouncing vectors overlap and cross near the middle,
+with a 100 ms red orb cue beginning 100 ms after each launch. Rising vectors
+dim progressively, and replacements launch 200 ms after the older return ends. The optional `allow_reversal` mapping field
 defaults to true for upward motion; vectors that fully leave the staff are
 retired rather than returning from beyond its ends.
 

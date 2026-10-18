@@ -19,14 +19,13 @@ RAINBOW_CYCLE_SECONDS = 6.0
 SPARK_CHANGES_PER_SECOND = 20
 ORB_ACCENT_SECONDS = 0.1
 BOUNCE_LEDS_PER_SECOND = 120.0
-CHANNEL_ROTATIONS_PER_SECOND = 4.0
+CHANNEL_ROTATIONS_PER_SECOND = 1.0
 CHANNEL_WAVE_ROWS_PER_SECOND = 56.0
 CHANNEL_WAVE_PERIOD_ROWS = 24
 CHANNEL_WAVE_DARK_ROWS = 6
 BOUNCE_FLASH_SECONDS = 0.1
 # Kept as an alias for callers that imported the former timing constant.
 BOUNCE_FLASH_DELAY_SECONDS = BOUNCE_FLASH_SECONDS
-BOUNCE_REST_SECONDS = 0.2
 STACK_FLASH_SEQUENCE_SECONDS = 0.36
 STACK_WHITE_HOLD_SECONDS = 0.4
 STACK_FADE_SECONDS = 0.15
@@ -41,6 +40,26 @@ DESCENT_TOTAL_SECONDS = (DESCENT_FALL_SECONDS + DESCENT_FILL_SECONDS +
 CHANNEL_WAVE_TOTAL_SECONDS = 3.0
 RELEASE_BURST_SECONDS = 1.5
 UNSET_INDICATOR_SECONDS = 0.45
+STACK_COLORS = ((255, 0, 0), (255, 140, 200), (255, 180, 0), (0, 255, 0),
+                (0, 0, 255), (0, 255, 255), (186, 0, 255), (255, 255, 255))
+SPIRAL_PALETTES = (
+    ((255, 100, 20), (255, 25, 0), (90, 0, 0)),
+    ((30, 255, 100), (0, 200, 30), (0, 45, 5)),
+    ((30, 180, 255), (0, 70, 255), (0, 0, 90)),
+    ((255, 70, 180), (200, 0, 255), (45, 0, 80)),
+    ((255, 255, 255), (0, 255, 255), (0, 35, 80)),
+)
+
+
+def _spiral_tail_length(geometry):
+    return max(1, round(2 * geometry.leds_per_repeat / geometry.turns_per_repeat))
+
+
+def _leading_tail_color(color, offset, length):
+    # A narrow bright front followed by a much dimmer, long tail.
+    fraction = offset / max(1, length - 1)
+    level = 0.18 * (1 - fraction) + 0.82 * max(0.0, 1 - fraction / 0.06)
+    return tuple(round(channel * level) for channel in color)
 
 
 @dataclass(frozen=True)
@@ -101,7 +120,7 @@ class StackingDropEffect:
             capacity = min(self.max_stack_vectors, len(path) // self.vector_length)
             level = min(reserved, max(0, capacity - 1))
             self.falling.append(FallingBar(
-                channel, rainbow(self.rng.random()),
+                channel, self.rng.choice(STACK_COLORS),
                 spawned_at,
                 len(path) - 1 - level * self.vector_length,
                 reserved < capacity))
@@ -280,7 +299,9 @@ def _accelerated_pair_lifetime(stem_length, length, center, speed,
                                acceleration, allow_reversal):
     up_arrival = time_to_position(center, -length, -speed, acceleration,
                                   direction=-1)
-    if allow_reversal:
+    if up_arrival is not None:
+        up_clear = up_arrival
+    elif allow_reversal:
         up_clear = time_to_position(center, stem_length + length, -speed,
                                     acceleration, direction=1)
     elif up_arrival is not None:
@@ -317,8 +338,9 @@ def opposed_pair_effect_duration(geometry, options=None):
 def upward_spiral_timing(stem_length, geometry=None, options=None):
     """Return (group interval, rise speed, group lifetime) for spiral bursts."""
     group_interval = 0.65
-    rise_speed = (stem_length + 6) / 0.9
-    group_lifetime = (stem_length * 1.2 + 6) / rise_speed + 0.12
+    tail_length = _spiral_tail_length(geometry) if geometry is not None else 8
+    rise_speed = (stem_length + tail_length + 1) / 0.9
+    group_lifetime = (stem_length * 1.2 + tail_length + 1) / rise_speed + 0.12
     options = options or {}
     if options.get("downward_acceleration") not in (None, "off"):
         units_per_wrap = (geometry.leds_per_repeat / geometry.turns_per_repeat
@@ -331,7 +353,11 @@ def upward_spiral_timing(stem_length, geometry=None, options=None):
             start = stem_length + index * stem_length / 10
             arrival = time_to_position(start, -1, -rise_speed,
                                        acceleration, direction=-1)
-            if not allow_reversal:
+            clear_at = time_to_position(start, -tail_length, -rise_speed,
+                                         acceleration, direction=-1)
+            if clear_at is not None:
+                lifetime = clear_at + 0.12
+            elif not allow_reversal:
                 lifetime = (arrival + 0.12 if arrival is not None else
                             rise_speed / acceleration + 0.2)
             else:
@@ -443,8 +469,7 @@ def opposed_pair_vectors(elapsed, geometry, peak_brightness=1.0,
         for direction in (-1, 1):
             samples = tuple(
                 (-direction * offset,
-                 tuple(round(channel * (1 - offset / max(1, length - 1)))
-                       for channel in color))
+                 _leading_tail_color(color, offset, length))
                 for offset in range(tail_length))
             vectors.append(LightVector(stem, samples,
                                        center + direction * distance,
@@ -471,6 +496,8 @@ def _accelerated_opposed_pairs(elapsed, geometry, peak_brightness,
             continue
         color = (0, 0, 255) if pair % 2 == 0 else (0, 255, 0)
         for direction in (-1, 1):
+            if direction < 0 and up_arrival is not None and age >= up_arrival:
+                continue
             vector_position = center + direction * speed * age + 0.5 * acceleration * age ** 2
             velocity = direction * speed + acceleration * age
             if direction < 0 and not allow_reversal and up_arrival is None:
@@ -482,8 +509,7 @@ def _accelerated_opposed_pairs(elapsed, geometry, peak_brightness,
             tail_direction = -1 if velocity < 0 else 1
             samples = tuple(
                 (-tail_direction * offset,
-                 tuple(round(channel * (1 - offset / max(1, length - 1)))
-                       for channel in color))
+                 _leading_tail_color(color, offset, length))
                 for offset in range(tail_length))
             vectors.append(LightVector(stem, samples, vector_position,
                                        brightness=fade,
@@ -525,7 +551,7 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
                                  flight_s * SPIRAL_LEDS_PER_SECOND))
                 depth = max(0.0, min(1.0, position / count))
                 vectors.append(palette_trail(
-                    geometry.stem, ((125, 255, 130), (0, 150, 65), (0, 25, 70)),
+                    geometry.stem, ((255, 255, 255), (225, 245, 235), (120, 150, 140)),
                     position, length=5, brightness=0.8 * (1 - 0.75 * depth)))
         else:
             stride = max(1, geometry.leds_per_repeat // 4)
@@ -573,17 +599,17 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
             else:
                 rise_s = impact_speed / acceleration + 0.2
         flight_s = fall_s + (rise_s or 0.0) if acceleration else 2 * travel_s
-        cycle_s = flight_s + BOUNCE_REST_SECONDS
+        cycle_s = max(0.2, flight_s / 2)
         impact_age = (t - fall_s) % cycle_s
         impact = (max(0.0, 1 - impact_age / 0.22) ** 2
                   if t >= fall_s and bottom else 0.0)
         anchor_color = palette_color(((0, 180, 20), (145, 255, 90)), impact)
         vectors.append(solid(stem[-length:], anchor_color,
-                             0.28 + 0.62 * impact))
+                             0.55 + 0.35 * impact))
         current_launch = int(t // cycle_s)
         phase = t - current_launch * cycle_s
-        flash_active = (current_launch > 0 and
-                        phase < BOUNCE_FLASH_SECONDS)
+        flash_active = (BOUNCE_FLASH_SECONDS <= phase <
+                        2 * BOUNCE_FLASH_SECONDS)
         orb_color = (190, 28, 0) if flash_active else (255, 100, 0)
         orb_level = 0.55 if flash_active else 0.25
         vectors.append(solid(geometry.orb, orb_color, orb_level,
@@ -616,9 +642,8 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
             if age <= travel_s or bottom == 0:
                 scale = fall_scale
             else:
-                top_scale = 0.0
                 progress = vector_position / bottom
-                scale = top_scale + (fall_scale - top_scale) * progress ** 3
+                scale = fall_scale * min(1.0, max(0.0, progress / 0.18)) ** 0.5
             vectors.append(LightVector(
                 stem, tuple((offset, (255, 255, 255)) for offset in range(length)),
                 vector_position, brightness=fade,
@@ -796,6 +821,12 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                 offset = index * len(stem) / 10
                 age = elapsed - started
                 initial_position = len(stem) + offset
+                if acceleration:
+                    clear_at = time_to_position(
+                        initial_position, -_spiral_tail_length(geometry),
+                        -rise_speed, acceleration, direction=-1)
+                    if clear_at is not None and age >= clear_at:
+                        continue
                 moving_position = motion_position(initial_position, -rise_speed,
                                                   acceleration, age)
                 speed = -rise_speed + acceleration * age
@@ -803,13 +834,14 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                 fade = 1.0
                 if acceleration and not allow_reversal and speed >= 0 and arrivals[index] is None:
                     fade = max(0.0, 1 - (age - rise_speed / acceleration) / 0.2)
-                palette = (MIST_PALETTE if index % 2 == 0 else EMBER_PALETTE)
+                palette = SPIRAL_PALETTES[(group * 3 + index) % len(SPIRAL_PALETTES)]
                 strength = (0.55, 0.65, 1.0)[group % 3]
                 vectors.append(palette_trail(
-                    stem, palette, moving_position, length=5,
+                    stem, palette, moving_position, length=_spiral_tail_length(geometry),
                     direction=direction, brightness=fade * strength))
-            arrival = (started + arrivals[-1] if acceleration else
-                       started + (len(stem) * 1.2 + 6) / rise_speed)
+            arrival = (started + arrivals[-1] if acceleration and arrivals[-1] is not None else
+                       None if acceleration else
+                       started + (len(stem) * 1.2 + _spiral_tail_length(geometry) + 1) / rise_speed)
             flash_age = elapsed - arrival if arrival is not None else -1
             if 0 <= flash_age < 0.12:
                 vectors.append(solid(geometry.orb, (30, 90, 255),
@@ -831,7 +863,7 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
         if (stop_at is None and not continuation and
                 elapsed >= CHANNEL_WAVE_TOTAL_SECONDS):
             return [], True
-        vectors = [solid(geometry.orb, (255, 255, 255), 0.16,
+        vectors = [solid(geometry.orb, (255, 255, 255), 0.22,
                          brightness_override=max_brightness)]
         rotation = int(elapsed * CHANNEL_ROTATIONS_PER_SECOND) % len(channels)
         for source in range(len(channels)):
@@ -855,7 +887,7 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                     CHANNEL_WAVE_PERIOD_ROWS - CHANNEL_WAVE_DARK_ROWS)
                 samples.append((row, tuple(round(c * ramp) for c in color)))
             vectors.append(LightVector(path, tuple(samples),
-                                       brightness=0.5 * pulse))
+                                       brightness=0.6 * pulse))
         return vectors, False
 
     if name == "opposed_pairs":

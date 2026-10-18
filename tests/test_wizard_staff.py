@@ -66,7 +66,7 @@ class WizardStaffTests(unittest.TestCase):
 
         staff = WizardStaff(StaffConfig(orb_leds=1, stem_leds=8))
         staff.trigger("quick", 0.0)
-        self.assertEqual(max(staff.step(3.05)[0]), 89)
+        self.assertEqual(max(staff.step(3.05)[0]), 16)
 
     def test_gamma_corrects_before_addition_and_preserves_output_multipliers(self):
         dim = solid((0,), (255, 0, 0), 0.5, brightness_override=0.5)
@@ -200,29 +200,46 @@ class WizardStaffTests(unittest.TestCase):
         self.assertAlmostEqual(crossing[2].position,
                                (len(geometry.stem) - 16) / 2)
         self.assertEqual(crossing[1].samples[0][1], (255, 100, 0))
-        self.assertLess(crossing[2].brightness_override,
-                        crossing[3].brightness_override)
+        self.assertEqual(crossing[2].brightness_override,
+                         crossing[3].brightness_override)
         near_top = base_vectors("bounce_vectors",
                                 2 * one_way - 0.001,
                                 geometry)
-        self.assertLess(near_top[2].brightness_override, 0.01)
+        self.assertLess(near_top[2].brightness_override, 0.02)
+
+    def test_accelerated_bounce_overlaps_and_reaches_top_before_fading(self):
+        geometry = StaffGeometry.from_config(StaffConfig())
+        bottom = len(geometry.stem) - 16
+        for level in ("low", "high"):
+            options = {"downward_acceleration": level}
+            acceleration = downward_acceleration(level, 4)
+            fall = time_to_position(0, bottom, BOUNCE_LEDS_PER_SECOND,
+                                    acceleration, direction=1)
+            crossing = base_vectors("bounce_vectors", 1.5 * fall, geometry,
+                                    options=options)[2:]
+            self.assertEqual(len(crossing), 2)
+            self.assertAlmostEqual(crossing[0].position, crossing[1].position)
+            near_top = base_vectors("bounce_vectors", 2 * fall - 0.05,
+                                    geometry, options=options)[2:]
+            self.assertLess(near_top[0].position, 10)
+            self.assertGreater(near_top[0].brightness_override, 0.03)
 
     def test_base_acceleration_is_enabled_for_selected_patterns(self):
         from wizard_staff.patterns import BASE_PATTERN_OPTIONS
 
         self.assertEqual(BASE_PATTERN_OPTIONS["green_spiral"][
-            "downward_acceleration"], "med")
+            "downward_acceleration"], "low")
         self.assertEqual(BASE_PATTERN_OPTIONS["bounce_vectors"][
-            "downward_acceleration"], "high")
+            "downward_acceleration"], "low")
         self.assertNotIn("downward_acceleration",
                          BASE_PATTERN_OPTIONS["green_channels"])
 
     def test_downward_acceleration_levels_use_physical_wraps(self):
         geometry = StaffGeometry.from_config(StaffConfig(leds_per_repeat=4,
                                                          turns_per_repeat=2))
-        self.assertEqual(downward_acceleration("low", 2), 4)
-        self.assertEqual(downward_acceleration("med", 2), 8)
-        self.assertEqual(downward_acceleration("high", 2), 12)
+        self.assertEqual(downward_acceleration("low", 2), 12)
+        self.assertEqual(downward_acceleration("med", 2), 20)
+        self.assertEqual(downward_acceleration("high", 2), 28)
         self.assertEqual(downward_acceleration(None), 0)
         self.assertAlmostEqual(time_to_position(0, 10, 4, 2, direction=1),
                                -2 + 14 ** 0.5)
@@ -360,7 +377,7 @@ class WizardStaffTests(unittest.TestCase):
         geometry = StaffGeometry.from_config(StaffConfig())
         first, _ = manual_vectors("channel_wave", 0.0, geometry)
         halfway, _ = manual_vectors("channel_wave", 0.125, geometry)
-        rotated, _ = manual_vectors("channel_wave", 0.25, geometry)
+        rotated, _ = manual_vectors("channel_wave", 1.0, geometry)
         self.assertEqual(first[0].samples[0][1], (255, 255, 255))
         self.assertEqual(first[0].brightness_override, 0.5)
         self.assertEqual(first[1].path, geometry.channel(0))
@@ -369,8 +386,8 @@ class WizardStaffTests(unittest.TestCase):
         self.assertTrue(all(row not in dict(first[1].samples) for row in range(6)))
         self.assertIn(6, dict(first[1].samples))
         self.assertTrue(all(row not in dict(rotated[1].samples)
-                            for row in range(10, 16)))
-        self.assertLessEqual(first[1].brightness, 0.4)
+                            for row in range(16, 22)))
+        self.assertLessEqual(first[1].brightness, 0.48)
 
     def test_d_charge_is_slower_with_blue_orb(self):
         geometry = StaffGeometry.from_config(StaffConfig())
@@ -452,7 +469,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(frame[:2], [(0, 0, 0)] * 2)
         self.assertEqual(staff.effect, "opposed_pairs")
         self.assertTrue(any(pixel != (0, 0, 0) for pixel in frame[2:]))
-        staff.step(4.5)
+        staff.step(12.0)
         self.assertIsNone(staff.effect)
 
     def test_opposed_pairs_launch_and_clear(self):

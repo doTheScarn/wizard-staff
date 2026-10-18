@@ -3,7 +3,7 @@
 import math
 
 
-ACCELERATION_LEVELS = {"low": 2.0, "med": 4.0, "high": 6.0}
+ACCELERATION_LEVELS = {"low": 6.0, "med": 10.0, "high": 14.0}
 
 
 def downward_acceleration(level, units_per_wrap=1.0):

@@ -1,24 +1,26 @@
 """Button sequences and optional per-pattern behavior."""
 
 
-# Omitted downward_acceleration means "off". Supported levels are low (2),
-# med (4), and high (6) physical wraps per second squared. Upward motion may
+# Omitted downward_acceleration means "off". Supported levels are low (6),
+# med (10), and high (14) physical wraps per second squared. Upward motion may
 # reverse under gravity by default; set allow_reversal=False to stop and fade.
 BASE_PATTERN_OPTIONS = {
-    "green_spiral": {"downward_acceleration": "med"},
+    "green_spiral": {"downward_acceleration": "low"},
     "green_channels": {},
-    "bounce_vectors": {"downward_acceleration": "high"},
+    "bounce_vectors": {"downward_acceleration": "low"},
 }
 
 
 PATTERN_OPTIONS = {
-    "quick": {"sequence": ("short",), "effect": "descent_fill"},
+    "quick": {"sequence": ("short",), "effect": "descent_fill",
+              "downward_acceleration": "high"},
     "medium": {"sequence": ("medium",), "effect": "channel_wave",
                "extend_on_hold": True},
     "double_quick": {"sequence": ("short", "short"),
                      "effect": "upward_spirals", "extend_on_hold": True},
     "quick_medium": {"sequence": ("short", "medium"),
-                     "effect": "opposed_pairs", "extend_on_hold": True},
+                     "effect": "opposed_pairs", "extend_on_hold": True,
+                     "downward_acceleration": "high"},
     "medium_quick": {"sequence": ("medium", "short"),
                      "effect": "twisting_ribbons"},
     "double_medium": {"sequence": ("medium", "medium"),

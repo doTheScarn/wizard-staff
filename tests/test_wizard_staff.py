@@ -21,7 +21,9 @@ from wizard_staff.effects import (BASE_PATTERNS, BOUNCE_LEDS_PER_SECOND,
 from wizard_staff.geometry import StaffGeometry
 from wizard_staff.hardware import PiHardware, encode_color
 from wizard_staff.motion import downward_acceleration, time_to_position
-from wizard_staff.vectors import solid, render
+from wizard_staff.vectors import LightVector, palette_trail, solid, render
+from wizard_staff.spell_effects import (EMBER_PALETTE, GATHERING_LAUNCHES,
+                                       GATHERING_TRAVEL_SECONDS, SPELL_DURATIONS)
 from wizard_staff.virtual_button import VirtualButtonPlayer
 
 
@@ -64,7 +66,36 @@ class WizardStaffTests(unittest.TestCase):
 
         staff = WizardStaff(StaffConfig(orb_leds=1, stem_leds=8))
         staff.trigger("quick", 0.0)
-        self.assertEqual(max(staff.step(3.05)[0]), 108)
+        self.assertEqual(max(staff.step(3.05)[0]), 89)
+
+    def test_gamma_corrects_before_addition_and_preserves_output_multipliers(self):
+        dim = solid((0,), (255, 0, 0), 0.5, brightness_override=0.5)
+        full = solid((0,), (255, 0, 0), brightness_override=0.5)
+        self.assertEqual(render([full], 1, gamma=2.2), [(128, 0, 0)])
+        expected_dim = 255 * 0.5 ** 2.2 * 0.5
+        self.assertAlmostEqual(render([dim], 1, gamma=2.2)[0][0],
+                               expected_dim, delta=0.5)
+        self.assertAlmostEqual(render([dim, dim], 1, gamma=2.2)[0][0],
+                               2 * expected_dim, delta=0.5)
+        self.assertEqual(render([dim], 1, gamma=1.0), [(64, 0, 0)])
+        # Spatial interpolation distributes already-corrected intensity.
+        point = LightVector((0, 1), ((0, (255, 0, 0)),), position=0.5)
+        self.assertEqual(render([point], 2, gamma=2.2),
+                         [(128, 0, 0), (128, 0, 0)])
+        for invalid in (0, -1, float("nan"), float("inf")):
+            with self.assertRaises(ValueError):
+                StaffConfig(gamma=invalid)
+
+    def test_palette_tail_changes_hue_and_unset_feedback_stays_visible(self):
+        vector = palette_trail(tuple(range(8)), EMBER_PALETTE, 7, length=8)
+        self.assertEqual(vector.samples[0][1], EMBER_PALETTE[0])
+        middle = vector.samples[3][1]
+        self.assertLess(middle[1] / middle[0],
+                        vector.samples[0][1][1] / vector.samples[0][1][0])
+        self.assertLess(sum(vector.samples[-1][1]), sum(middle))
+        staff = WizardStaff()
+        staff.trigger("short_short_medium", 0.0)
+        self.assertTrue(any(sum(color) for color in staff.step(0.1)))
 
     def test_tire_pixel_color_mapping_matches_existing_strip(self):
         self.assertEqual(encode_color((255, 0, 0), "tire_pixel"), (0, 255, 0))
@@ -281,7 +312,49 @@ class WizardStaffTests(unittest.TestCase):
         arrival, _ = manual_vectors("upward_spirals", 1.12, geometry)
         self.assertEqual(sum(vector.path == geometry.orb for vector in before), 1)
         self.assertEqual(sum(vector.path == geometry.orb for vector in arrival), 2)
-        self.assertEqual(early[0].brightness, 0.85)
+        self.assertEqual(early[0].brightness, 0.18)
+
+    def test_gathering_spell_morphs_and_orb_responds_on_arrival(self):
+        geometry = StaffGeometry.from_config(StaffConfig())
+        early, _ = manual_vectors("gathering_spell", 0.4, geometry)
+        self.assertTrue(any(v.path in geometry.channels and v.brightness > 0
+                            for v in early))
+        self.assertTrue(all(v.brightness == 0 for v in early
+                            if v.path == geometry.stem))
+        later, _ = manual_vectors("gathering_spell", 1.3, geometry)
+        self.assertTrue(any(v.path == geometry.stem and v.brightness > 0
+                            for v in later))
+        arrival = GATHERING_LAUNCHES[0][0] + GATHERING_TRAVEL_SECONDS
+        before, _ = manual_vectors("gathering_spell", arrival - 0.001, geometry)
+        hit, _ = manual_vectors("gathering_spell", arrival, geometry)
+        self.assertFalse(any(v.path == geometry.orb for v in before))
+        self.assertTrue(any(v.path == geometry.orb for v in hit))
+        self.assertEqual(manual_vectors("gathering_spell", 4.1, geometry),
+                         ([], False))  # A dark rest before returning to base.
+
+    def test_new_spells_run_via_virtual_gestures_and_finish_on_small_geometry(self):
+        for turns in (1, 2):
+            config = StaffConfig(orb_leds=1, stem_leds=9, turns_per_repeat=turns)
+            staff = WizardStaff(config)
+            player = VirtualButtonPlayer(config, "input")
+            player.enqueue("h")
+            player.enqueue("i")
+            effects = set()
+            for frame_number in range(15 * 60):
+                now = frame_number / 60
+                pressed = player.tick(now, staff.effect is not None)
+                frame = staff.step(now, pressed)
+                if staff.effect:
+                    effects.add(staff.effect)
+                self.assertEqual(len(frame), 10)
+                self.assertTrue(all(0 <= value <= 255
+                                    for color in frame for value in color))
+            self.assertEqual(effects, set(SPELL_DURATIONS))
+            self.assertIsNone(staff.effect)
+            self.assertIsNone(player.current_key)
+            for effect, duration in SPELL_DURATIONS.items():
+                self.assertEqual(manual_vectors(effect, duration, staff.geometry),
+                                 ([], True))
 
     def test_c_dark_spacer_rotates_one_column_per_step(self):
         geometry = StaffGeometry.from_config(StaffConfig())
@@ -633,11 +706,13 @@ class WizardStaffTests(unittest.TestCase):
                 effects.append((staff.effect, now))
             previous_effect = staff.effect
 
-        self.assertEqual([key for key, _ in starts[:7]], list("abcdefg"))
-        self.assertEqual(selected_bases[:7], [1, 2, 3, 1, 2, 3, 1])
-        self.assertEqual(base_rows[:7],
+        self.assertEqual([key for key, _ in starts[:9]], list("abcdefghi"))
+        self.assertEqual(selected_bases[:9], [1, 2, 3, 1, 2, 3, 1, 2, 3])
+        self.assertEqual(base_rows[:9],
                          ["base_a", "base_b", "base_c", "base_d",
-                          "base_e", "base_f", "base_g"])
+                          "base_e", "base_f", "base_g", "base_h", "base_i"])
+        self.assertTrue({"twisting_ribbons", "gathering_spell"}.issubset(
+            effect for effect, _ in effects))
         self.assertEqual([effect for effect, _ in effects[:8]],
                          ["descent_fill", "upward_spirals", "channel_wave",
                           "charge", "release_burst", "opposed_pairs", "stack_drop",
@@ -711,7 +786,8 @@ class WizardStaffTests(unittest.TestCase):
                 self.assertIn(name, block)
         self.assertEqual([code for _, code, _ in PATTERN_ROWS],
                          ["a", "1", "b", "2", "c", "3",
-                          "d", "1", "e", "2", "f", "3", "g", "1"])
+                          "d", "1", "e", "2", "f", "3", "g", "1",
+                          "h", "2", "i", "3"])
         self.assertEqual(sum(code == "f" for _, code, _ in PATTERN_ROWS), 1)
         base_countdown = next(line.index("s left") for line in base_block.splitlines()
                               if "s left" in line)

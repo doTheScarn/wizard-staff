@@ -5,8 +5,10 @@ import math
 import random
 from dataclasses import dataclass
 
-from .vectors import LightVector, solid, trail
+from .vectors import LightVector, palette_color, palette_trail, solid, trail
 from .motion import downward_acceleration, position as motion_position, time_to_position
+from .spell_effects import (EMBER_PALETTE, MIST_PALETTE, RED_PALETTE,
+                           SPELL_DURATIONS, spell_vectors)
 
 
 BASE_PATTERNS = ("green_spiral", "green_channels", "bounce_vectors")
@@ -508,8 +510,9 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
                                 offset=offset))
                 launches.append((SPIRAL_LEDS_PER_SECOND, offset, span))
                 depth = max(0.0, min(1.0, position / count))
-                vectors.append(trail(geometry.stem, (40, 170, 100), position,
-                                     length=5, brightness=0.8 * (1 - 0.75 * depth)))
+                vectors.append(palette_trail(
+                    geometry.stem, ((125, 255, 130), (0, 150, 65), (0, 25, 70)),
+                    position, length=5, brightness=0.8 * (1 - 0.75 * depth)))
         else:
             stride = max(1, geometry.leds_per_repeat // 4)
             selected = range(0, geometry.leds_per_repeat, stride)
@@ -556,12 +559,17 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
             else:
                 rise_s = impact_speed / acceleration + 0.2
         flight_s = fall_s + (rise_s or 0.0) if acceleration else 2 * travel_s
-        vectors.append(solid(stem[-length:], (0, 20, 255), 0.9))
         phase = t % travel_s
+        impact_age = (t - fall_s) % travel_s
+        impact = (max(0.0, 1 - impact_age / 0.22) ** 2
+                  if t >= fall_s and bottom else 0.0)
+        anchor_color = palette_color(((0, 20, 255), (185, 220, 255)), impact)
+        vectors.append(solid(stem[-length:], anchor_color,
+                             0.18 + 0.72 * impact))
         flash_active = (BOUNCE_FLASH_DELAY_SECONDS <= phase <
                         2 * BOUNCE_FLASH_DELAY_SECONDS)
         orb_color = (190, 28, 0) if flash_active else (255, 100, 0)
-        orb_level = 0.55 if flash_active else 0.9
+        orb_level = 0.55 if flash_active else 0.25
         vectors.append(solid(geometry.orb, orb_color, orb_level,
                              brightness_override=max_brightness))
         current_launch = int(t // travel_s)
@@ -677,11 +685,10 @@ class InteractiveRedShots:
                 if self.arrival is None and not self.allow_reversal:
                     fade = max(0.0, 1 - (age - self.speed /
                                          self.acceleration) / self.FLASH_SECONDS)
-                samples = tuple((-direction * index,
-                                 (round(255 * (1 - index / self.tail_length)), 0, 0))
-                                for index in range(self.tail_length))
-                vectors.append(LightVector(stem, samples, head, brightness=fade,
-                                           brightness_override=self.max_brightness))
+                vectors.append(palette_trail(
+                    stem, RED_PALETTE, head, length=self.tail_length,
+                    direction=direction, brightness=fade,
+                    brightness_override=self.max_brightness))
             flash_age = age - self.arrival if self.arrival is not None else -1
             if 0 <= flash_age < self.FLASH_SECONDS:
                 orb_level = max(orb_level, 1 - flash_age / self.FLASH_SECONDS)
@@ -697,6 +704,8 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
     """Return (vectors, finished) for a finite triggered effect."""
     options = options or {}
     stem = geometry.stem
+    if name in SPELL_DURATIONS:
+        return spell_vectors(name, elapsed, geometry, max_brightness)
     if name == "descent_fill":
         fall_s, fill_s = descent_fill_timing(geometry, options)
         acceleration = downward_acceleration(
@@ -708,7 +717,7 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                     if not acceleration else
                     motion_position(-1, (len(stem) + 2) / fall_s,
                                     acceleration, elapsed))
-            return [trail(stem, (20, 200, 255), head, length=6)], False
+            return [palette_trail(stem, MIST_PALETTE, head, length=6)], False
         if elapsed < fall_s + fill_s:
             fraction = (elapsed - fall_s) / fill_s
             lit = min(len(stem), math.ceil(fraction * len(stem)))
@@ -728,9 +737,9 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                 fade = max(0.0, 1 - (fill_age - abs(fill_speed) /
                                      acceleration) / 0.2)
             vectors = [solid(stem[-lit:], (255, 0, 0), 0.4)] if lit else []
-            vectors.append(trail(stem, (20, 200, 255), head,
-                                 length=6, direction=fill_direction,
-                                 brightness=fade))
+            vectors.append(palette_trail(stem, MIST_PALETTE, head,
+                                         length=6, direction=fill_direction,
+                                         brightness=fade))
             return vectors, False
         if elapsed < fall_s + fill_s + DESCENT_HOLD_SECONDS:
             color = rainbow(math.floor((elapsed - fall_s - fill_s) * 9) / 9)
@@ -762,7 +771,7 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                 ((stop_at is not None or not continuation) and
                  elapsed >= last_group * group_interval + group_lifetime)):
             return [], True
-        vectors = [solid(geometry.orb, (170, 125, 10), 0.85)]
+        vectors = [solid(geometry.orb, (170, 125, 10), 0.18)]
         first_group = max(0, int((elapsed - group_lifetime) // group_interval))
         for group in range(first_group, last_group + 1):
             started = group * group_interval
@@ -779,15 +788,18 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                 fade = 1.0
                 if acceleration and not allow_reversal and speed >= 0 and arrivals[index] is None:
                     fade = max(0.0, 1 - (age - rise_speed / acceleration) / 0.2)
-                vectors.append(trail(stem, rainbow(index / 3 + group / 5),
-                                     moving_position, length=5, direction=direction,
-                                     brightness=fade))
+                palette = (MIST_PALETTE if index % 2 == 0 else EMBER_PALETTE)
+                strength = (0.55, 0.65, 1.0)[group % 3]
+                vectors.append(palette_trail(
+                    stem, palette, moving_position, length=5,
+                    direction=direction, brightness=fade * strength))
             arrival = (started + arrivals[-1] if acceleration else
                        started + (len(stem) * 1.2 + 6) / rise_speed)
             flash_age = elapsed - arrival if arrival is not None else -1
             if 0 <= flash_age < 0.12:
                 vectors.append(solid(geometry.orb, (30, 90, 255),
-                                     0.35 * math.sin(math.pi * flash_age / 0.12)))
+                                     0.8 * math.sin(math.pi * flash_age / 0.12),
+                                     brightness_override=max_brightness))
         return vectors, False
 
     if name == "channel_wave":
@@ -804,7 +816,7 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
         if (stop_at is None and not continuation and
                 elapsed >= CHANNEL_WAVE_TOTAL_SECONDS):
             return [], True
-        vectors = [solid(geometry.orb, (255, 255, 255), 0.8,
+        vectors = [solid(geometry.orb, (255, 255, 255), 0.16,
                          brightness_override=max_brightness)]
         rotation = int(elapsed * CHANNEL_ROTATIONS_PER_SECOND) % len(channels)
         for source in range(len(channels)):
@@ -923,7 +935,7 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
     if name == "unset":
         if elapsed >= UNSET_INDICATOR_SECONDS:
             return [], True
-        return [solid(geometry.unset_indicator, (70, 0, 0), 0.35)], False
+        return [solid(geometry.unset_indicator, (255, 0, 0), 0.35)], False
 
     raise ValueError(f"Unknown manual effect: {name}")
 

@@ -10,6 +10,7 @@ from .effects import (
     release_burst_duration,
     upward_spiral_effect_duration,
 )
+from .spell_effects import SPELL_DURATIONS
 
 PATTERN_ROWS = (
     ("a", "a", "Descent fill"),
@@ -26,6 +27,10 @@ PATTERN_ROWS = (
     ("base_f", "3", "Bouncing vectors"),
     ("g", "g", "Interactive red shots"),
     ("base_g", "1", "Green spiral"),
+    ("h", "h", "Twisting ribbons"),
+    ("base_h", "2", "Green channels"),
+    ("i", "i", "Gathering spell"),
+    ("base_i", "3", "Bouncing vectors"),
 )
 PATTERN_NAMES = {key: name for key, _, name in PATTERN_ROWS}
 EFFECT_LENGTHS = {
@@ -33,6 +38,7 @@ EFFECT_LENGTHS = {
     "channel_wave": CHANNEL_WAVE_TOTAL_SECONDS,
     "release_burst": RELEASE_BURST_SECONDS,
     "unset": UNSET_INDICATOR_SECONDS,
+    **SPELL_DURATIONS,
 }
 EFFECT_ROWS = {
     "descent_fill": "a",
@@ -45,6 +51,8 @@ EFFECT_ROWS = {
     "stack_drop": "f",
     "stack_unload": "f",
     "interactive_red_shots": "g",
+    "twisting_ribbons": "h",
+    "gathering_spell": "i",
 }
 
 
@@ -58,10 +66,10 @@ def _next_effect_at(player):
     if player.current_key is None:
         return None
     key = player.current_key
-    if key in ("a", "b"):
+    if key in ("a", "b", "c", "e", "h", "i"):
         delay = player.config.debounce_s + player.config.multi_press_s
         return player.started_at + player.intervals[-1][1] + delay
-    if key in ("c", "e"):
+    if key == "g":
         return player.started_at + player.intervals[-1][1] + player.config.debounce_s
     start = player.intervals[-1][0]
     return player.started_at + start + player.config.debounce_s + player.config.long_press_s

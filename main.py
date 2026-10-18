@@ -31,6 +31,8 @@ def parse_args():
     parser.add_argument("--frame-rate", type=float, default=60)
     parser.add_argument("--brightness", type=float, default=1.0,
                         help="Additional hardware output multiplier (default: 1.0).")
+    parser.add_argument("--gamma", type=float, default=2.2,
+                        help="Perceived color/fade correction; 1.0 disables it (default: 2.2).")
     parser.add_argument("--led-pin", default="D18")
     parser.add_argument("--data-start", choices=("top", "bottom"), default=DATA_START)
     parser.add_argument("--pixel-order", default="RGB")
@@ -39,7 +41,7 @@ def parse_args():
     parser.add_argument("--button-gpio", type=int, default=17)
     parser.add_argument("--virtual-button", choices=("cycle", "input"),
                         help="Cycle gestures with numbered base gaps, or enter "
-                             "1-3 for base patterns, a-g for patterns, s for an "
+                             "1-3 for base patterns, a-i for patterns, s for an "
                              "interactive shot, and x to exit that mode; "
                              "overrides the GPIO button.")
     parser.add_argument("--dry-run", action="store_true")
@@ -51,6 +53,8 @@ def parse_args():
                                               "hold_start", "quick_medium",
                                               "quick_hold_start",
                                               "short_short_short",
+                                              "medium_quick", "double_medium",
+                                              "twisting_ribbons", "gathering_spell",
                                               "interactive_red_shots"),
                         help="Start a slot immediately; useful with --dry-run.")
     args = parser.parse_args()
@@ -83,6 +87,7 @@ def main():
                          baseline_shaft_brightness=BASELINE_SHAFT_BRIGHTNESS,
                          baseline_orb_brightness=BASELINE_ORB_BRIGHTNESS,
                          max_brightness=MAX_BRIGHTNESS,
+                         gamma=args.gamma,
                          led_pin=args.led_pin, data_start=args.data_start,
                          pixel_order=args.pixel_order,
                          color_mapping=args.color_mapping, button_gpio=args.button_gpio)

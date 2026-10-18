@@ -104,7 +104,8 @@ class WizardStaff:
         return render(vectors, self.geometry.total_leds,
                       orb_leds=self.geometry.orb_leds,
                       baseline_shaft_brightness=self.config.baseline_shaft_brightness,
-                      baseline_orb_brightness=self.config.baseline_orb_brightness)
+                      baseline_orb_brightness=self.config.baseline_orb_brightness,
+                      gamma=self.config.gamma)
 
     def step(self, now, pressed=False):
         if self.started_at is None:

@@ -11,10 +11,12 @@ VIRTUAL_GESTURES = (
     ("e", "quick press, then medium press (opposed pairs)"),
     ("f", "quick press, then long hold"),
     ("g", "three quick presses (interactive red shots)"),
+    ("h", "medium press, then quick press (twisting ribbons)"),
+    ("i", "two medium presses (gathering spell)"),
     ("s", "interactive red shot"),
     ("x", "simulate a long press to exit interactive shots"),
 )
-CYCLE_GESTURES = VIRTUAL_GESTURES[:7]
+CYCLE_GESTURES = VIRTUAL_GESTURES[:-2]
 LABELS = dict(VIRTUAL_GESTURES)
 HOLD_EFFECT_SECONDS = 5.0
 BASE_INTERVAL_SECONDS = 5.0
@@ -73,6 +75,10 @@ class VirtualButtonPlayer:
         if key == "g":
             return tuple((index * (quick + gap),
                           index * (quick + gap) + quick) for index in range(3))
+        if key == "h":
+            return ((0.0, medium), (medium + gap, medium + gap + quick))
+        if key == "i":
+            return ((0.0, medium), (medium + gap, 2 * medium + gap))
         if key == "s":
             return ((0.0, quick),)
         if key == "x":

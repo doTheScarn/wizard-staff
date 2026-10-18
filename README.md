@@ -30,6 +30,24 @@ baseline per vector; bright sparks, bursts, and orb flashes use
 `MAX_BRIGHTNESS = 0.5`. This is a peak setting for those vectors, not a cap on
 the sum of overlapping RGB contributions.
 
+The `effects` branch uses gamma 2.2 for authored RGB values and brightness
+envelopes. Each vector is corrected before its baseline/override multiplier and
+before contributions are added. Those output multipliers and fractional-pixel
+coverage remain linear; clipping still happens after addition. A full-strength
+primary therefore keeps the same configured peak, while intermediate colors
+and fades change. Dry-run frames and live frames use the same correction.
+Use `--gamma 1.0` for an uncorrected comparison, or try `--gamma 2.8` for a
+stronger curve. `StaffConfig.gamma` accepts 1.0 through 3.5.
+
+5050 describes the 5 mm package, not an exact LED model or measured response.
+Adafruit's [5050 NeoPixel description](https://www.adafruit.com/product/1379)
+includes WS2812B and SK6812 variants. Its
+[gamma guide](https://learn.adafruit.com/led-tricks-gamma-correction?view=all)
+uses an empirically chosen 2.8 and discusses loss of dim steps with 8-bit PWM.
+Our 2.2 starting point is a gentler estimate for this staff's dim tails, not a
+calibration of its particular LEDs. The existing RGB order and red/green output
+swap are independent of gamma correction.
+
 Measure the completed wrap before setting these values. The code does not need
 the total stem count to divide evenly by `leds_per_repeat`; the final partial
 turn is handled automatically.
@@ -39,31 +57,34 @@ turn is handled automatically.
 Without virtual-button selection, the base patterns cycle every 18 seconds:
 
 1. A gently pulsing green orb with a brief white accent at each launch, and
-   fading lights falling along the helix at 48 stem LEDs per second.
+   green-to-teal palette tails falling along the helix with an initial speed
+   of 48 stem LEDs per second and medium downward acceleration.
 2. The same orb and launch accent with lights falling along vertical channels
    at 9.6 vertical LEDs per second.
-3. A bright orange orb that turns dim red 100 ms before launching each white,
-   eight-LED vector. The first launch waits for its red cue. The vectors fall
-   at 120 stem LEDs per second at half their former brightness and stop just
-   above the eight-LED blue anchor. Downward acceleration is medium for this
-   pattern (4 physical wraps/s²); the vector reflects with the same speed and
-   gravity slows it as it rises. Rising and falling vectors cross near the
-   middle.
+3. A subdued orange orb with a red cue beginning 100 ms after each white,
+   eight-LED vector launches. The vectors start falling at 120 stem LEDs per
+   second and reflect just above the eight-LED blue anchor. Each impact
+   briefly brightens the anchor toward icy white. Downward acceleration is
+   high (6 physical wraps/s²); the vector reflects with the same speed and
+   gravity slows it as it rises. Upward vectors fade steeply near the top.
    Rainbow sparks remain available in code but are out of the cycle.
 
 The button has software debounce and a 0.38-second multi-press window:
 
 | Gesture | Slot | Effect |
 | --- | --- | --- |
-| One quick press | a | Light descends, then leads a steady, dim red fill back up; orb flashes |
-| Two quick presses | b | Overlapping groups of three upward spirals; brighter yellow orb flashes blue when each group arrives |
-| Medium press | c | Dimmer channel wave with a six-row dark gap, rising at 56 rows per second and rotating four times per second under a white orb |
+| One quick press | a | Icy blue/violet tail descends, then leads a steady, dim red fill back up; orb flashes |
+| Two quick presses | b | Growing groups of upward ember and mist trails; quiet yellow orb flashes blue on group arrivals |
+| Medium press | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating four times per second under a subdued white orb |
 | Long press and hold | d | Slower upward lights and a blue orb while held; release keeps the orb blue until the first burst vector arrives, then bright purple with rapid white flashes |
 | Quick press then medium press | e | Alternating blue and green pairs of 30-wrap vectors launch from the center toward both ends twice per second; orb stays dark |
 | Quick press then long hold | f | Four-pixel bars drop and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
+| Three quick presses | g | Interactive red shots with a warm head and red-to-crimson fading tail; short presses shoot and a long hold exits |
+| Medium then quick press | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds |
+| Two medium presses | i | Two smaller channel launches, a pause, then a stronger launch; trails merge into a spiral and the orb responds on each arrival; 4.2 seconds |
 
-The button interpreter also defines the following short/medium sequences. The
-three-press sequences are currently unassigned and show the unset indicator:
+The button interpreter defines the following short/medium sequences. Unassigned
+sequences show the brief red unset indicator:
 
 | Sequence | Assignment |
 | --- | --- |
@@ -71,8 +92,8 @@ three-press sequences are currently unassigned and show the unset indicator:
 | One medium | Channel wave |
 | Two shorts | Upward spirals |
 | Short, then medium | Opposed pairs |
-| Medium, then short | Unassigned |
-| Two mediums | Unassigned |
+| Medium, then short | Twisting ribbons |
+| Two mediums | Gathering spell |
 | Short, short, short | Interactive red shots |
 | Short, short, medium | Unassigned |
 | Short, medium, short | Unassigned |
@@ -82,8 +103,9 @@ three-press sequences are currently unassigned and show the unset indicator:
 | Medium, medium, short | Unassigned |
 | Medium, medium, medium | Unassigned |
 
-Timings and slot assignments are in `wizard_staff/config.py` and
-`wizard_staff/controller.py`. Unset slots use a brief red indicator.
+Button timings are in `wizard_staff/config.py`; slot assignments and optional
+pattern flags are in `wizard_staff/patterns.py`. New spell choreography and
+shared ember/mist/red palettes are in `wizard_staff/spell_effects.py`.
 Patterns b, c, and e can be extended by pressing and holding while they run.
 Releasing stops new launches and lets active vectors clear. Pattern e normally
 launches for three seconds.
@@ -114,12 +136,13 @@ python main.py --dry-run --seconds 10
 python main.py --dry-run --seconds 5 --effect quick
 python main.py --dry-run --virtual-button cycle
 python main.py --dry-run --virtual-button input
+python main.py --dry-run --effect gathering_spell --seconds 5
 python -m unittest discover -s tests -v
 ```
 
 `--virtual-button` replaces GPIO button input while keeping the normal gesture
 classifier. In `input` mode, type `1`, `2`, or `3` followed by Enter to select
-a base pattern, `a` through `g` to simulate a gesture, `s` to launch an
+a base pattern, `a` through `i` to simulate a gesture, `s` to launch an
 interactive shot, or `x` to simulate a long press and exit interactive mode.
 The input mode prints the complete pattern list and command options at startup.
 Type `q` to quit.
@@ -129,7 +152,8 @@ Hold gestures stay active for about five seconds before release. A selected
 base pattern resumes after a triggered effect.
 In `cycle` mode, the route includes `g` for interactive red shots after the
 existing `a` through `f` gestures and their base-pattern gaps. It demonstrates
-three shots at irregular intervals, then holds to exit and resumes the route.
+three shots at irregular intervals, then holds to exit and continues through
+`h` (twisting ribbons) and `i` (gathering spell), with their base-pattern gaps.
 Each base step lasts five seconds after its triggered effect finishes. The
 terminal display shows the route in order, highlights its active row, and
 updates a countdown in a fixed column. Interactive mode displays its tap/hold

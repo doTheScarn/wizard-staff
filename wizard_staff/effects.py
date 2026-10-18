@@ -23,7 +23,10 @@ CHANNEL_ROTATIONS_PER_SECOND = 4.0
 CHANNEL_WAVE_ROWS_PER_SECOND = 56.0
 CHANNEL_WAVE_PERIOD_ROWS = 24
 CHANNEL_WAVE_DARK_ROWS = 6
-BOUNCE_FLASH_DELAY_SECONDS = 0.1
+BOUNCE_FLASH_SECONDS = 0.1
+# Kept as an alias for callers that imported the former timing constant.
+BOUNCE_FLASH_DELAY_SECONDS = BOUNCE_FLASH_SECONDS
+BOUNCE_REST_SECONDS = 0.2
 STACK_FLASH_SEQUENCE_SECONDS = 0.36
 STACK_WHITE_HOLD_SECONDS = 0.4
 STACK_FADE_SECONDS = 0.15
@@ -500,15 +503,26 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
         if name == "green_spiral":
             count = len(geometry.stem)
             launches = []
+            start = -3.0
+            if acceleration:
+                flight_s = time_to_position(
+                    start, count + 2, SPIRAL_LEDS_PER_SECOND, acceleration,
+                    direction=1)
+            else:
+                flight_s = (count + 5) / SPIRAL_LEDS_PER_SECOND
+            flight_s = flight_s or (count + 5) / SPIRAL_LEDS_PER_SECOND
             for index in range(3):
-                offset = index * count / 3
-                span = count + 6
-                position = ((t * SPIRAL_LEDS_PER_SECOND + offset) % span - 3
-                            if not acceleration else
-                            _accelerated_falling_position(
-                                t, count, SPIRAL_LEDS_PER_SECOND, acceleration,
-                                offset=offset))
-                launches.append((SPIRAL_LEDS_PER_SECOND, offset, span))
+                launch_at = index * flight_s / 3
+                age = t - launch_at
+                if age < 0:
+                    position = start
+                else:
+                    age %= flight_s
+                    position = motion_position(
+                        start, SPIRAL_LEDS_PER_SECOND, acceleration, age)
+                launches.append((SPIRAL_LEDS_PER_SECOND,
+                                 -launch_at * SPIRAL_LEDS_PER_SECOND,
+                                 flight_s * SPIRAL_LEDS_PER_SECOND))
                 depth = max(0.0, min(1.0, position / count))
                 vectors.append(palette_trail(
                     geometry.stem, ((125, 255, 130), (0, 150, 65), (0, 25, 70)),
@@ -546,7 +560,7 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
                                    acceleration, direction=1)
                   if acceleration else bottom / BOUNCE_LEDS_PER_SECOND)
         fall_s = max(0.0, fall_s or 0.0)
-        travel_s = max(2 * BOUNCE_FLASH_DELAY_SECONDS, fall_s)
+        travel_s = max(2 * BOUNCE_FLASH_SECONDS, fall_s)
         impact_speed = BOUNCE_LEDS_PER_SECOND + acceleration * fall_s
         rise_s = (time_to_position(bottom, 0, -impact_speed, acceleration,
                                    direction=-1)
@@ -559,23 +573,24 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
             else:
                 rise_s = impact_speed / acceleration + 0.2
         flight_s = fall_s + (rise_s or 0.0) if acceleration else 2 * travel_s
-        phase = t % travel_s
-        impact_age = (t - fall_s) % travel_s
+        cycle_s = flight_s + BOUNCE_REST_SECONDS
+        impact_age = (t - fall_s) % cycle_s
         impact = (max(0.0, 1 - impact_age / 0.22) ** 2
                   if t >= fall_s and bottom else 0.0)
-        anchor_color = palette_color(((0, 20, 255), (185, 220, 255)), impact)
+        anchor_color = palette_color(((0, 180, 20), (145, 255, 90)), impact)
         vectors.append(solid(stem[-length:], anchor_color,
-                             0.18 + 0.72 * impact))
-        flash_active = (BOUNCE_FLASH_DELAY_SECONDS <= phase <
-                        2 * BOUNCE_FLASH_DELAY_SECONDS)
+                             0.28 + 0.62 * impact))
+        current_launch = int(t // cycle_s)
+        phase = t - current_launch * cycle_s
+        flash_active = (current_launch > 0 and
+                        phase < BOUNCE_FLASH_SECONDS)
         orb_color = (190, 28, 0) if flash_active else (255, 100, 0)
         orb_level = 0.55 if flash_active else 0.25
         vectors.append(solid(geometry.orb, orb_color, orb_level,
                              brightness_override=max_brightness))
-        current_launch = int(t // travel_s)
-        oldest_launch = max(0, int((t - flight_s) // travel_s))
+        oldest_launch = max(0, int((t - flight_s) // cycle_s))
         for launch in range(oldest_launch, current_launch + 1):
-            age = t - launch * travel_s
+            age = t - launch * cycle_s
             if not 0 <= age < flight_s:
                 continue
             if acceleration and fall_s > 0:
@@ -601,7 +616,7 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
             if age <= travel_s or bottom == 0:
                 scale = fall_scale
             else:
-                top_scale = min(0.01 * max_brightness, fall_scale)
+                top_scale = 0.0
                 progress = vector_position / bottom
                 scale = top_scale + (fall_scale - top_scale) * progress ** 3
             vectors.append(LightVector(

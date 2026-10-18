@@ -57,16 +57,17 @@ turn is handled automatically.
 Without virtual-button selection, the base patterns cycle every 18 seconds:
 
 1. A gently pulsing green orb with a brief white accent at each launch, and
-   green-to-teal palette tails falling along the helix with an initial speed
-   of 48 stem LEDs per second and medium downward acceleration.
+   green-to-teal palette tails that each enter from above the top and fall
+   along the helix at 48 stem LEDs per second with medium downward acceleration.
 2. The same orb and launch accent with lights falling along vertical channels
    at 9.6 vertical LEDs per second.
-3. A subdued orange orb with a red cue beginning 100 ms after each white,
-   eight-LED vector launches. The vectors start falling at 120 stem LEDs per
-   second and reflect just above the eight-LED blue anchor. Each impact
-   briefly brightens the anchor toward icy white. Downward acceleration is
-   high (6 physical wraps/s²); the vector reflects with the same speed and
-   gravity slows it as it rises. Upward vectors fade steeply near the top.
+3. A subdued orange orb and a green anchor that brightens at impact. White,
+   eight-LED vectors start falling at 120 stem LEDs per second and reflect
+   just above the anchor. Downward acceleration is high (6 physical wraps/s²);
+   the vector reflects with the same speed and gravity slows it as it rises.
+   The rising vector fades to zero at the top and stays absent for 200 ms;
+   then the red orb cue and next vector launch together. Upward vectors fade
+   steeply.
    Rainbow sparks remain available in code but are out of the cycle.
 
 The button has software debounce and a 0.38-second multi-press window:
@@ -166,9 +167,10 @@ The optional `downward_acceleration` value in `wizard_staff/patterns.py` is
 setting it to `off`) preserves the original motion. Medium acceleration is
 enabled for the green spiral base pattern, and high acceleration for bouncing
 vectors; green channels and triggered patterns remain off unless their mapping
-is changed. Bouncing vectors launch before their orb's red flash, which begins
-100 ms later. Their upward travel fades steeply near the top. The optional
-`allow_reversal` mapping field defaults to true for upward motion.
+is changed. Bouncing vectors fade completely at the top, remain absent for
+200 ms, then launch with a 100 ms red orb cue. Their upward travel fades
+steeply near the top. The optional `allow_reversal` mapping field defaults to
+true for upward motion.
 
 On the Raspberry Pi, connect the strip data line
 to the configured NeoPixel pin (default `D18`), and wire a normally-open

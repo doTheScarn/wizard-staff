@@ -14,7 +14,7 @@ from wizard_staff.controller import WizardStaff
 from wizard_staff.cycle_status import (CycleStatusDisplay, PATTERN_ROWS,
                                        format_status, status_snapshot)
 from wizard_staff.effects import (BASE_PATTERNS, BOUNCE_LEDS_PER_SECOND,
-                                  BOUNCE_FLASH_DELAY_SECONDS, STACK_COLORS,
+                                  BOUNCE_FLASH_DELAY_SECONDS, STACK_COLORS, RELEASE_DELAY_SECONDS,
                                   StackingDropEffect, base_vectors,
                                   manual_vectors, opposed_pair_vectors,
                                   opposed_pair_clear_time, descent_fill_timing)
@@ -273,6 +273,16 @@ class WizardStaffTests(unittest.TestCase):
                                        options=options)
         self.assertFalse(done)
         self.assertEqual(len(vectors), 4)
+        # Original linear ramp and pre-branch (uncorrected) brightness.
+        staff = WizardStaff(StaffConfig())
+        staff.trigger("quick_medium", 0)
+        expected = render(vectors, staff.geometry.total_leds, gamma=1.0)
+        self.assertEqual(staff.step(0.55), expected)
+        for vector in vectors:
+            for offset, color in vector.samples:
+                channel = 2 if color[2] else 1
+                self.assertEqual(color[channel],
+                                 round(255 * (1 - abs(offset) / 119)))
 
     def test_base_acceleration_is_enabled_for_selected_patterns(self):
         from wizard_staff.patterns import BASE_PATTERN_OPTIONS
@@ -428,6 +438,9 @@ class WizardStaffTests(unittest.TestCase):
 
     def test_gathering_repeats_tightly_spaced_phrase_with_strong_final_shots(self):
         self.assertEqual(len(GATHERING_LAUNCHES), 6)
+        self.assertAlmostEqual(GATHERING_LAUNCHES[3][0] -
+                               (GATHERING_LAUNCHES[2][0] +
+                                GATHERING_TRAVEL_SECONDS + 0.6), 0.2)
         for offset in (0, 3):
             phrase = GATHERING_LAUNCHES[offset:offset + 3]
             self.assertAlmostEqual(phrase[1][0] - phrase[0][0], 0.5 / 2.5)
@@ -493,10 +506,17 @@ class WizardStaffTests(unittest.TestCase):
                                      charge_time=5.0)
         self.assertEqual(released[0].samples, held[0].samples)
         self.assertEqual(released[0].brightness, held[0].brightness)
+        self.assertEqual(len(released), 1)
+        pending, _ = manual_vectors("release_burst", RELEASE_DELAY_SECONDS - 0.001,
+                                    geometry, charge_time=5.0)
+        launched, _ = manual_vectors("release_burst", RELEASE_DELAY_SECONDS,
+                                     geometry, charge_time=5.0)
+        self.assertEqual(len(pending), 1)
+        self.assertGreater(len(launched), 1)
         before_arrival, _ = manual_vectors("release_burst", 0.7, geometry,
                                            charge_time=5.0)
         arrival_time = (len(geometry.stem) - 1) * 0.75 / len(geometry.stem)
-        at_arrival, _ = manual_vectors("release_burst", arrival_time + 0.03,
+        at_arrival, _ = manual_vectors("release_burst", RELEASE_DELAY_SECONDS + arrival_time + 0.03,
                                        geometry, charge_time=5.0)
         self.assertEqual(before_arrival[0].samples, held[0].samples)
         self.assertEqual(at_arrival[0].samples[0][1], (170, 0, 220))
@@ -780,7 +800,7 @@ class WizardStaffTests(unittest.TestCase):
         staff.trigger("hold_release", 7.6)
         self.assertEqual(staff.effect, "release_burst")
         self.assertAlmostEqual(staff.charge_time, 1.6)
-        staff.step(9.2)
+        staff.step(9.4)
         self.assertIsNone(staff.effect)
 
     def test_virtual_button_cycle_runs_every_gesture_with_base_gaps(self):

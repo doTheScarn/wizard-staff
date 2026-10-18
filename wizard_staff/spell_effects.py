@@ -10,12 +10,16 @@ MIST_PALETTE = ((210, 245, 255), (15, 155, 255), (45, 8, 120))
 RED_PALETTE = ((255, 32, 5), (255, 0, 0), (65, 0, 15))
 GATHERING_PHRASE = tuple((started / 2.5, strength) for started, strength in
                          ((0.3, 0.55), (0.8, 0.65), (1.95, 1.0)))
-GATHERING_REPEAT_SECONDS = GATHERING_PHRASE[-1][0] + 0.2
+GATHERING_TRAVEL_SECONDS = 1.3
+GATHERING_FLASH_SECONDS = 0.6
+GATHERING_SET_GAP_SECONDS = 0.2
+# Finish the last arrival and flash before beginning the second triplet.
+GATHERING_REPEAT_SECONDS = (GATHERING_PHRASE[-1][0] - GATHERING_PHRASE[0][0] +
+                            GATHERING_TRAVEL_SECONDS + GATHERING_FLASH_SECONDS +
+                            GATHERING_SET_GAP_SECONDS)
 GATHERING_LAUNCHES = tuple(
     (started + repeat * GATHERING_REPEAT_SECONDS, strength)
     for repeat in range(2) for started, strength in GATHERING_PHRASE)
-GATHERING_TRAVEL_SECONDS = 1.3
-GATHERING_FLASH_SECONDS = 0.6
 SPELL_DURATIONS = {
     "twisting_ribbons": 5.0,
     "gathering_spell": (GATHERING_LAUNCHES[-1][0] + GATHERING_TRAVEL_SECONDS +

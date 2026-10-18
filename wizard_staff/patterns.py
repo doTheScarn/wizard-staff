@@ -18,7 +18,7 @@ PATTERN_OPTIONS = {
     "double_quick": {"sequence": ("short", "short"),
                      "effect": "upward_spirals", "extend_on_hold": True},
     "quick_medium": {"sequence": ("short", "medium"),
-                     "effect": "opposed_pairs", "extend_on_hold": True},
+                     "effect": "opposed_pairs", "extend_on_hold": True, "gamma": 1.0},
     "medium_quick": {"sequence": ("medium", "short"),
                      "effect": "twisting_ribbons"},
     "double_medium": {"sequence": ("medium", "medium"),

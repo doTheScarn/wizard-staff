@@ -3,7 +3,7 @@
 from .effects import (
     CHANNEL_WAVE_TOTAL_SECONDS,
     DESCENT_TOTAL_SECONDS,
-    RELEASE_BURST_SECONDS,
+    RELEASE_BURST_SECONDS, RELEASE_DELAY_SECONDS,
     UNSET_INDICATOR_SECONDS,
     descent_fill_duration,
     opposed_pair_effect_duration,
@@ -36,7 +36,7 @@ PATTERN_NAMES = {key: name for key, _, name in PATTERN_ROWS}
 EFFECT_LENGTHS = {
     "descent_fill": DESCENT_TOTAL_SECONDS,
     "channel_wave": CHANNEL_WAVE_TOTAL_SECONDS,
-    "release_burst": RELEASE_BURST_SECONDS,
+    "release_burst": RELEASE_BURST_SECONDS + RELEASE_DELAY_SECONDS,
     "unset": UNSET_INDICATOR_SECONDS,
     **SPELL_DURATIONS,
 }

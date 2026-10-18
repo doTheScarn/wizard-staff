@@ -36,6 +36,7 @@ before contributions are added. Those output multipliers and fractional-pixel
 coverage remain linear; clipping still happens after addition. A full-strength
 primary therefore keeps the same configured peak, while intermediate colors
 and fades change. Dry-run frames and live frames use the same correction.
+Pattern e uses gamma 1.0 to preserve its pre-branch appearance.
 Use `--gamma 1.0` for an uncorrected comparison, or try `--gamma 2.8` for a
 stronger curve. `StaffConfig.gamma` accepts 1.0 through 3.5.
 
@@ -79,12 +80,12 @@ The button has software debounce and a 0.38-second multi-press window:
 | One quick press | a | Icy blue/violet tail descends, then leads a steady, dim red fill back up; orb flashes |
 | Two quick presses | b | Growing groups of varied, two-wrap upward trails; quiet yellow orb flashes blue on group arrivals |
 | Medium press | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating one column per second under a subdued white orb |
-| Long press and hold | d | Slower upward lights and a blue orb while held; release keeps the orb blue until the first burst vector arrives, then bright purple with rapid white flashes |
-| Quick press then medium press | e | Alternating blue and green pairs with bright leading edges and dim 30-wrap tails launch from the center toward both ends twice per second; orb stays dark |
+| Long press and hold | d | Slower upward lights and a blue orb while held; release pauses for 200 ms with the orb blue before launching the burst; the orb stays blue until the first burst vector arrives, then bright purple with rapid white flashes |
+| Quick press then medium press | e | Original alternating blue and green pairs with linear 30-wrap fading tails launch from the center toward both ends twice per second; orb stays dark |
 | Quick press then long hold | f | Four-pixel bars cycle through all eight familiar saturated colors in shuffled order before repeating, and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
 | Three quick presses | g | Interactive red shots with a warm head and red-to-crimson fading tail; short presses shoot and a long hold exits |
 | Medium then quick press | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds |
-| Two medium presses | i | Two quick small/small/strong triplets, with launch spacing reduced by 2.5×; trails merge into a spiral and the orb responds on arrival; about 3.8 seconds |
+| Two medium presses | i | Two small/small/strong triplets with tight spacing inside each triplet; the second starts 200 ms after the first finishes its final orb flash; about 5.6 seconds |
 
 The button interpreter defines the following short/medium sequences. Unassigned
 sequences show the brief red unset indicator:

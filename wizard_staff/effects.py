@@ -40,6 +40,7 @@ DESCENT_TOTAL_SECONDS = (DESCENT_FALL_SECONDS + DESCENT_FILL_SECONDS +
                         DESCENT_HOLD_SECONDS)
 CHANNEL_WAVE_TOTAL_SECONDS = 3.0
 RELEASE_BURST_SECONDS = 1.5
+RELEASE_DELAY_SECONDS = 0.2
 UNSET_INDICATOR_SECONDS = 0.45
 STACK_COLORS = ((255, 0, 0), (255, 140, 200), (255, 180, 0), (0, 255, 0),
                 (0, 0, 255), (0, 255, 255), (186, 0, 255), (255, 255, 255))
@@ -54,13 +55,6 @@ SPIRAL_PALETTES = (
 
 def _spiral_tail_length(geometry):
     return max(1, round(2 * geometry.leds_per_repeat / geometry.turns_per_repeat))
-
-
-def _leading_tail_color(color, offset, length):
-    # A narrow bright front followed by a much dimmer, long tail.
-    fraction = offset / max(1, length - 1)
-    level = 0.18 * (1 - fraction) + 0.82 * max(0.0, 1 - fraction / 0.06)
-    return tuple(round(channel * level) for channel in color)
 
 
 @dataclass(frozen=True)
@@ -309,9 +303,7 @@ def _accelerated_pair_lifetime(stem_length, length, center, speed,
                                acceleration, allow_reversal):
     up_arrival = time_to_position(center, -length, -speed, acceleration,
                                   direction=-1)
-    if up_arrival is not None:
-        up_clear = up_arrival
-    elif allow_reversal:
+    if allow_reversal:
         up_clear = time_to_position(center, stem_length + length, -speed,
                                     acceleration, direction=1)
     elif up_arrival is not None:
@@ -422,18 +414,18 @@ def release_burst_duration(geometry, options=None):
         options.get("downward_acceleration", "off"),
         geometry.leds_per_repeat / geometry.turns_per_repeat)
     if not acceleration:
-        return RELEASE_BURST_SECONDS
+        return RELEASE_DELAY_SECONDS + RELEASE_BURST_SECONDS
     stem_length = len(geometry.stem)
     speed = stem_length / 0.75
     arrival = time_to_position(stem_length - 1, -1, -speed,
                                acceleration, direction=-1)
     if arrival is not None:
-        return max(RELEASE_BURST_SECONDS, arrival + 0.75)
+        return RELEASE_DELAY_SECONDS + max(RELEASE_BURST_SECONDS, arrival + 0.75)
     if options.get("allow_reversal", True):
         clear = time_to_position(stem_length - 1, stem_length + 6,
                                  -speed, acceleration, direction=1)
-        return max(RELEASE_BURST_SECONDS, (clear or 0.0) + 0.75)
-    return max(RELEASE_BURST_SECONDS,
+        return RELEASE_DELAY_SECONDS + max(RELEASE_BURST_SECONDS, (clear or 0.0) + 0.75)
+    return RELEASE_DELAY_SECONDS + max(RELEASE_BURST_SECONDS,
                speed / acceleration + 0.2 + 0.75)
 
 
@@ -479,7 +471,8 @@ def opposed_pair_vectors(elapsed, geometry, peak_brightness=1.0,
         for direction in (-1, 1):
             samples = tuple(
                 (-direction * offset,
-                 _leading_tail_color(color, offset, length))
+                 tuple(round(channel * (1 - offset / max(1, length - 1)))
+                       for channel in color))
                 for offset in range(tail_length))
             vectors.append(LightVector(stem, samples,
                                        center + direction * distance,
@@ -506,8 +499,6 @@ def _accelerated_opposed_pairs(elapsed, geometry, peak_brightness,
             continue
         color = (0, 0, 255) if pair % 2 == 0 else (0, 255, 0)
         for direction in (-1, 1):
-            if direction < 0 and up_arrival is not None and age >= up_arrival:
-                continue
             vector_position = center + direction * speed * age + 0.5 * acceleration * age ** 2
             velocity = direction * speed + acceleration * age
             if direction < 0 and not allow_reversal and up_arrival is None:
@@ -519,7 +510,8 @@ def _accelerated_opposed_pairs(elapsed, geometry, peak_brightness,
             tail_direction = -1 if velocity < 0 else 1
             samples = tuple(
                 (-tail_direction * offset,
-                 _leading_tail_color(color, offset, length))
+                 tuple(round(channel * (1 - offset / max(1, length - 1)))
+                       for channel in color))
                 for offset in range(tail_length))
             vectors.append(LightVector(stem, samples, vector_position,
                                        brightness=fade,
@@ -947,6 +939,12 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
         return vectors, False
 
     if name == "release_burst":
+        if elapsed >= release_burst_duration(geometry, options):
+            return [], True
+        blue_level = min(0.9, 0.35 + charge_time * 0.07)
+        if elapsed < RELEASE_DELAY_SECONDS:
+            return [solid(geometry.orb, (10, 80, 255), blue_level)], False
+        elapsed -= RELEASE_DELAY_SECONDS
         acceleration = downward_acceleration(
             options.get("downward_acceleration", "off"),
             geometry.leds_per_repeat / geometry.turns_per_repeat)
@@ -954,9 +952,6 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                                    -len(stem) / 0.75, acceleration,
                                    direction=-1) if acceleration else 0.75)
         allow_reversal = options.get("allow_reversal", True)
-        active_time = release_burst_duration(geometry, options)
-        if elapsed >= (active_time if acceleration else RELEASE_BURST_SECONDS):
-            return [], True
         arrival = (travel if acceleration else
                    (len(stem) - 1) * 0.75 / len(stem))
         blue_level = min(0.9, 0.35 + charge_time * 0.07)

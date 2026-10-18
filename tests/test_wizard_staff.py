@@ -452,6 +452,29 @@ class WizardStaffTests(unittest.TestCase):
             self.assertTrue(any(v.path == geometry.stem and len(v.samples) == 32
                                 and v.brightness == 1.0 for v in vectors))
 
+    def test_flag_bands_shimmer_and_virtual_button_trigger(self):
+        for size in (9, 269):
+            staff = WizardStaff(StaffConfig(stem_leds=size))
+            geometry = staff.geometry
+            first, _ = manual_vectors("american_flag", 0.1, geometry)
+            later, _ = manual_vectors("american_flag", 0.4, geometry)
+            self.assertEqual(first[0].samples[0][1], (255, 0, 0))
+            for index, color in first[1].samples:
+                band = index * 3 // size
+                self.assertEqual(tuple(channel > 0 for channel in color),
+                                 ((True, False, False), (True, True, True),
+                                  (False, False, True))[band])
+            self.assertNotEqual(first[1].samples, later[1].samples)
+        player = VirtualButtonPlayer(staff.config, "input")
+        self.assertTrue(player.enqueue("j"))
+        seen = False
+        for frame in range(11 * 60):
+            now = frame / 60
+            staff.step(now, player.tick(now, staff.effect is not None))
+            seen |= staff.effect == "american_flag"
+        self.assertTrue(seen)
+        self.assertIsNone(staff.effect)
+
     def test_new_spells_run_via_virtual_gestures_and_finish_on_small_geometry(self):
         for turns in (1, 2):
             config = StaffConfig(orb_leds=1, stem_leds=9, turns_per_repeat=turns)
@@ -469,7 +492,7 @@ class WizardStaffTests(unittest.TestCase):
                 self.assertEqual(len(frame), 10)
                 self.assertTrue(all(0 <= value <= 255
                                     for color in frame for value in color))
-            self.assertEqual(effects, set(SPELL_DURATIONS))
+            self.assertEqual(effects, {"twisting_ribbons", "gathering_spell"})
             self.assertIsNone(staff.effect)
             self.assertIsNone(player.current_key)
             for effect, duration in SPELL_DURATIONS.items():
@@ -914,7 +937,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual([code for _, code, _ in PATTERN_ROWS],
                          ["a", "1", "b", "2", "c", "3",
                           "d", "1", "e", "2", "f", "3", "g", "1",
-                          "h", "2", "i", "3"])
+                          "h", "2", "i", "3", "j", "1"])
         self.assertEqual(sum(code == "f" for _, code, _ in PATTERN_ROWS), 1)
         base_countdown = next(line.index("s left") for line in base_block.splitlines()
                               if "s left" in line)

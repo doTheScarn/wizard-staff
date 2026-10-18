@@ -13,6 +13,7 @@ VIRTUAL_GESTURES = (
     ("g", "three quick presses (interactive red shots)"),
     ("h", "medium press, then quick press (twisting ribbons)"),
     ("i", "two medium presses (gathering spell)"),
+    ("j", "two quick presses, then medium press (American flag)"),
     ("s", "interactive red shot"),
     ("x", "simulate a long press to exit interactive shots"),
 )
@@ -79,6 +80,9 @@ class VirtualButtonPlayer:
             return ((0.0, medium), (medium + gap, medium + gap + quick))
         if key == "i":
             return ((0.0, medium), (medium + gap, 2 * medium + gap))
+        if key == "j":
+            return ((0.0, quick), (quick + gap, 2 * quick + gap),
+                    (2 * (quick + gap), 2 * (quick + gap) + medium))
         if key == "s":
             return ((0.0, quick),)
         if key == "x":

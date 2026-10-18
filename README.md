@@ -86,6 +86,7 @@ The button has software debounce and a 0.38-second multi-press window:
 | Three quick presses | g | Interactive red shots with a warm head and red-to-crimson fading tail; short presses shoot and a long hold exits |
 | Medium then quick press | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds |
 | Two medium presses | i | Two small/small/strong triplets with tight spacing inside each triplet; the second starts 200 ms after the first finishes its final orb flash; about 5.6 seconds |
+| Two quick presses then medium press | j | Red orb and upper stem third, white middle third, blue lower third; traveling brightness ripples soften between gusts; 8 seconds |
 
 The button interpreter defines the following short/medium sequences. Unassigned
 sequences show the brief red unset indicator:
@@ -99,7 +100,7 @@ sequences show the brief red unset indicator:
 | Medium, then short | Twisting ribbons |
 | Two mediums | Gathering spell |
 | Short, short, short | Interactive red shots |
-| Short, short, medium | Unassigned |
+| Short, short, medium | American flag |
 | Short, medium, short | Unassigned |
 | Short, medium, medium | Unassigned |
 | Medium, short, short | Unassigned |
@@ -146,7 +147,7 @@ python -m unittest discover -s tests -v
 
 `--virtual-button` replaces GPIO button input while keeping the normal gesture
 classifier. In `input` mode, type `1`, `2`, or `3` followed by Enter to select
-a base pattern, `a` through `i` to simulate a gesture, `s` to launch an
+a base pattern, `a` through `j` to simulate a gesture, `s` to launch an
 interactive shot, or `x` to simulate a long press and exit interactive mode.
 The input mode prints the complete pattern list and command options at startup.
 Type `q` to quit.
@@ -224,3 +225,6 @@ Use a suitable external LED power supply with a shared ground. `--brightness`
 is an additional NeoPixel output multiplier, defaulting to 1.0 so the pattern
 baseline and flash settings are applied as written.
 
+
+The American flag pattern is also available directly with `--effect american_flag`.
+Its stem is divided into three nearly equal LED bands; the orb stays red.

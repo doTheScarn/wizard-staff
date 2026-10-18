@@ -31,6 +31,8 @@ PATTERN_ROWS = (
     ("base_h", "2", "Green channels"),
     ("i", "i", "Gathering spell"),
     ("base_i", "3", "Bouncing vectors"),
+    ("j", "j", "American flag"),
+    ("base_j", "1", "Green spiral"),
 )
 PATTERN_NAMES = {key: name for key, _, name in PATTERN_ROWS}
 EFFECT_LENGTHS = {
@@ -53,6 +55,7 @@ EFFECT_ROWS = {
     "interactive_red_shots": "g",
     "twisting_ribbons": "h",
     "gathering_spell": "i",
+    "american_flag": "j",
 }
 
 
@@ -69,7 +72,7 @@ def _next_effect_at(player):
     if key in ("a", "b", "c", "e", "h", "i"):
         delay = player.config.debounce_s + player.config.multi_press_s
         return player.started_at + player.intervals[-1][1] + delay
-    if key == "g":
+    if key in ("g", "j"):
         return player.started_at + player.intervals[-1][1] + player.config.debounce_s
     start = player.intervals[-1][0]
     return player.started_at + start + player.config.debounce_s + player.config.long_press_s

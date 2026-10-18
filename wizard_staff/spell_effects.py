@@ -22,6 +22,7 @@ GATHERING_LAUNCHES = tuple(
     for repeat in range(2) for started, strength in GATHERING_PHRASE)
 SPELL_DURATIONS = {
     "twisting_ribbons": 5.0,
+    "american_flag": 8.0,
     "gathering_spell": (GATHERING_LAUNCHES[-1][0] + GATHERING_TRAVEL_SECONDS +
                         GATHERING_FLASH_SECONDS + 0.15),
 }
@@ -111,7 +112,36 @@ def gathering_spell(elapsed, geometry, max_brightness):
     return vectors, False
 
 
+def american_flag(elapsed, geometry, max_brightness):
+    """Three fixed color bands with traveling, gently decaying wind ripples."""
+    duration = SPELL_DURATIONS["american_flag"]
+    if elapsed >= duration:
+        return [], True
+    colors = ((255, 0, 0), (255, 255, 255), (0, 0, 255))
+    # Each gust softens over time, then a fresh gust rolls through the fabric.
+    gust_age = elapsed % 2.8
+    gust = (_smooth(gust_age / 0.2) * math.exp(-gust_age / 0.9) *
+            (1 - _smooth((gust_age - 2.4) / 0.4)))
+    fade = 1 - _smooth((elapsed - (duration - 0.5)) / 0.5)
+    samples = []
+    count = len(geometry.stem)
+    for index in range(count):
+        depth = index / max(1, count - 1)
+        phase = 2 * math.pi * (2.2 * depth - 1.6 * elapsed)
+        ripple = (0.5 + 0.5 * math.sin(phase)) ** 2
+        # The lower fabric moves more; the colors never shift or go dark.
+        level = fade * (1 - 0.3 * gust * (0.5 + 0.5 * depth) * ripple)
+        color = colors[min(2, index * 3 // count)]
+        samples.append((index, tuple(round(channel * level) for channel in color)))
+    return [solid(geometry.orb, colors[0], fade,
+                  brightness_override=0.6 * max_brightness),
+            LightVector(geometry.stem, tuple(samples),
+                        brightness_override=0.6 * max_brightness)], False
+
+
 def spell_vectors(name, elapsed, geometry, max_brightness):
+    if name == "american_flag":
+        return american_flag(elapsed, geometry, max_brightness)
     if name == "twisting_ribbons":
         return twisting_ribbons(elapsed, geometry, max_brightness)
     if name == "gathering_spell":

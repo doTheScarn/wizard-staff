@@ -41,7 +41,7 @@ def parse_args():
     parser.add_argument("--button-gpio", type=int, default=17)
     parser.add_argument("--virtual-button", choices=("cycle", "input"),
                         help="Cycle gestures with numbered base gaps, or enter "
-                             "1-3 for base patterns, a-i for patterns, s for an "
+                             "1-3 for base patterns, a-j for patterns, s for an "
                              "interactive shot, and x to exit that mode; "
                              "overrides the GPIO button.")
     parser.add_argument("--dry-run", action="store_true")
@@ -55,6 +55,7 @@ def parse_args():
                                               "short_short_short",
                                               "medium_quick", "double_medium",
                                               "twisting_ribbons", "gathering_spell",
+                                              "short_short_medium", "american_flag",
                                               "interactive_red_shots"),
                         help="Start a slot immediately; useful with --dry-run.")
     args = parser.parse_args()

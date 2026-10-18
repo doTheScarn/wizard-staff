@@ -12,7 +12,7 @@ VIRTUAL_GESTURES = (
     ("f", "quick press, then long hold"),
     ("g", "three quick presses (interactive red shots)"),
     ("s", "interactive red shot"),
-    ("x", "hold to exit interactive shots"),
+    ("x", "simulate a long press to exit interactive shots"),
 )
 CYCLE_GESTURES = VIRTUAL_GESTURES[:7]
 LABELS = dict(VIRTUAL_GESTURES)
@@ -57,7 +57,9 @@ class VirtualButtonPlayer:
         gap = (config.debounce_s + config.multi_press_s) / 2
         medium = (config.quick_press_max_s + config.long_press_s) / 2
         hold = config.long_press_s + HOLD_EFFECT_SECONDS + config.debounce_s
-        exit_hold = config.long_press_s + config.debounce_s
+        # The classifier starts its hold timer only after the press debounce.
+        # Keep the raw signal asserted long enough to cross that threshold.
+        exit_hold = config.long_press_s + 2 * config.debounce_s + 0.02
         if key == "a":
             return ((0.0, quick),)
         if key == "b":
@@ -85,8 +87,15 @@ class VirtualButtonPlayer:
         self.effect_seen = False
         self.started_at = now
         self.intervals = self._intervals_for(key)
-        self.script_end = (self.intervals[-1][1] + self.config.multi_press_s +
-                           self.config.debounce_s + 0.25)
+        if key in ("s", "x"):
+            # Allow the classifier to observe the debounced release before the
+            # next queued command starts; shots can still overlap in flight.
+            self.script_end = (self.intervals[-1][1] +
+                               self.config.debounce_s +
+                               2 / self.config.frame_rate)
+        else:
+            self.script_end = (self.intervals[-1][1] + self.config.multi_press_s +
+                               self.config.debounce_s + 0.25)
         self.announcements.append(f"Virtual {key}: {LABELS[key]}")
 
     def tick(self, now, effect_active=False, interactive=False):
@@ -130,7 +139,8 @@ class VirtualButtonPlayer:
                 self.config.quick_press_max_s - self.config.debounce_s) / 4
             intervals = ((0.25, 0.25 + quick), (1.15, 1.15 + quick),
                          (2.5, 2.5 + quick), (3.9, 3.9 +
-                          self.config.long_press_s + self.config.debounce_s))
+                          self.config.long_press_s + 2 * self.config.debounce_s +
+                          0.02))
             if elapsed >= intervals[-1][1]:
                 self.interactive_cycle_started_at = None
                 self.interactive_cycle_exiting = True

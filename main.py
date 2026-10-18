@@ -8,7 +8,7 @@ import time
 
 from wizard_staff.config import StaffConfig
 from wizard_staff.controller import WizardStaff
-from wizard_staff.cycle_status import CycleStatusDisplay
+from wizard_staff.cycle_status import CycleStatusDisplay, PATTERN_ROWS
 from wizard_staff.virtual_button import VIRTUAL_GESTURES, VirtualButtonPlayer
 
 
@@ -93,9 +93,12 @@ def main():
                     if args.virtual_button == "cycle" else None)
     commands = Queue() if args.virtual_button == "input" else None
     if commands is not None:
-        mapping = ("1-3: base patterns; " +
-                   ", ".join(f"{key}: {label}" for key, label in VIRTUAL_GESTURES))
-        print(f"Virtual button commands: {mapping}. Type q to quit.", flush=True)
+        print("Virtual button options:", flush=True)
+        for _, code, name in PATTERN_ROWS:
+            print(f"  {code}: {name}", flush=True)
+        for key, label in VIRTUAL_GESTURES[-2:]:
+            print(f"  {key}: {label}", flush=True)
+        print("  q: quit", flush=True)
         threading.Thread(target=read_virtual_commands, args=(commands,),
                          daemon=True).start()
     hardware = None

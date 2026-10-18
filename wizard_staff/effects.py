@@ -21,7 +21,7 @@ CHANNEL_ROTATIONS_PER_SECOND = 4.0
 CHANNEL_WAVE_ROWS_PER_SECOND = 56.0
 CHANNEL_WAVE_PERIOD_ROWS = 24
 CHANNEL_WAVE_DARK_ROWS = 6
-BOUNCE_PREFLASH_SECONDS = 0.1
+BOUNCE_FLASH_DELAY_SECONDS = 0.1
 STACK_FLASH_SEQUENCE_SECONDS = 0.36
 STACK_WHITE_HOLD_SECONDS = 0.4
 STACK_FADE_SECONDS = 0.15
@@ -543,7 +543,7 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
                                    acceleration, direction=1)
                   if acceleration else bottom / BOUNCE_LEDS_PER_SECOND)
         fall_s = max(0.0, fall_s or 0.0)
-        travel_s = max(2 * BOUNCE_PREFLASH_SECONDS, fall_s)
+        travel_s = max(2 * BOUNCE_FLASH_DELAY_SECONDS, fall_s)
         impact_speed = BOUNCE_LEDS_PER_SECOND + acceleration * fall_s
         rise_s = (time_to_position(bottom, 0, -impact_speed, acceleration,
                                    direction=-1)
@@ -558,47 +558,48 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
         flight_s = fall_s + (rise_s or 0.0) if acceleration else 2 * travel_s
         vectors.append(solid(stem[-length:], (0, 20, 255), 0.9))
         phase = t % travel_s
-        orb_color = (190, 28, 0) if phase < BOUNCE_PREFLASH_SECONDS else (255, 100, 0)
-        orb_level = 0.55 if phase < BOUNCE_PREFLASH_SECONDS else 0.9
+        flash_active = (BOUNCE_FLASH_DELAY_SECONDS <= phase <
+                        2 * BOUNCE_FLASH_DELAY_SECONDS)
+        orb_color = (190, 28, 0) if flash_active else (255, 100, 0)
+        orb_level = 0.55 if flash_active else 0.9
         vectors.append(solid(geometry.orb, orb_color, orb_level,
                              brightness_override=max_brightness))
-        if t >= BOUNCE_PREFLASH_SECONDS:
-            current_launch = int((t - BOUNCE_PREFLASH_SECONDS) // travel_s)
-            oldest_launch = max(0, int((t - BOUNCE_PREFLASH_SECONDS -
-                                        flight_s) // travel_s))
-            for launch in range(oldest_launch, current_launch + 1):
-                age = t - BOUNCE_PREFLASH_SECONDS - launch * travel_s
-                if not 0 <= age < flight_s:
-                    continue
-                if acceleration and fall_s > 0:
-                    if age <= fall_s:
-                        vector_position = motion_position(0, BOUNCE_LEDS_PER_SECOND,
-                                                          acceleration, age)
-                    else:
-                        vector_position = motion_position(bottom, -impact_speed,
-                                                          acceleration, age - fall_s)
-                    vector_position = max(0.0, min(float(bottom), vector_position))
+        current_launch = int(t // travel_s)
+        oldest_launch = max(0, int((t - flight_s) // travel_s))
+        for launch in range(oldest_launch, current_launch + 1):
+            age = t - launch * travel_s
+            if not 0 <= age < flight_s:
+                continue
+            if acceleration and fall_s > 0:
+                if age <= fall_s:
+                    vector_position = motion_position(0, BOUNCE_LEDS_PER_SECOND,
+                                                      acceleration, age)
                 else:
-                    vector_position = min(bottom, min(age, 2 * travel_s - age) *
-                                          BOUNCE_LEDS_PER_SECOND)
-                fall_scale = 0.4 * max_brightness
-                fade = 1.0
-                if (acceleration and not allow_reversal and bottom and
-                        rise_s is not None and
-                        time_to_position(bottom, 0, -impact_speed,
-                                         acceleration, direction=-1) is None and
-                        age > fall_s + impact_speed / acceleration):
-                    fade = max(0.0, 1 - (age - fall_s -
-                                         impact_speed / acceleration) / 0.2)
-                if age <= travel_s or bottom == 0:
-                    scale = fall_scale
-                else:
-                    top_scale = min(0.05, fall_scale)
-                    scale = top_scale + (fall_scale - top_scale) * vector_position / bottom
-                vectors.append(LightVector(
-                    stem, tuple((offset, (255, 255, 255)) for offset in range(length)),
-                    vector_position, brightness=fade,
-                    brightness_override=scale))
+                    vector_position = motion_position(bottom, -impact_speed,
+                                                      acceleration, age - fall_s)
+                vector_position = max(0.0, min(float(bottom), vector_position))
+            else:
+                vector_position = min(bottom, min(age, 2 * travel_s - age) *
+                                      BOUNCE_LEDS_PER_SECOND)
+            fall_scale = 0.4 * max_brightness
+            fade = 1.0
+            if (acceleration and not allow_reversal and bottom and
+                    rise_s is not None and
+                    time_to_position(bottom, 0, -impact_speed,
+                                     acceleration, direction=-1) is None and
+                    age > fall_s + impact_speed / acceleration):
+                fade = max(0.0, 1 - (age - fall_s -
+                                     impact_speed / acceleration) / 0.2)
+            if age <= travel_s or bottom == 0:
+                scale = fall_scale
+            else:
+                top_scale = min(0.01 * max_brightness, fall_scale)
+                progress = vector_position / bottom
+                scale = top_scale + (fall_scale - top_scale) * progress ** 3
+            vectors.append(LightVector(
+                stem, tuple((offset, (255, 255, 255)) for offset in range(length)),
+                vector_position, brightness=fade,
+                brightness_override=scale))
         return vectors
 
     if name == "rainbow_sparks":

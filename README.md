@@ -120,7 +120,9 @@ python -m unittest discover -s tests -v
 `--virtual-button` replaces GPIO button input while keeping the normal gesture
 classifier. In `input` mode, type `1`, `2`, or `3` followed by Enter to select
 a base pattern, `a` through `g` to simulate a gesture, `s` to launch an
-interactive shot, or `x` to hold and exit interactive mode. Type `q` to quit.
+interactive shot, or `x` to simulate a long press and exit interactive mode.
+The input mode prints the complete pattern list and command options at startup.
+Type `q` to quit.
 Commands entered while a finite effect is running are queued; `s` and `x` can
 also be entered while interactive mode is active.
 Hold gestures stay active for about five seconds before release. A selected
@@ -137,10 +139,12 @@ button by omitting `--dry-run`.
 
 The optional `downward_acceleration` value in `wizard_staff/patterns.py` is
 `low`, `med`, or `high`, meaning 2, 4, or 6 physical wraps/s². Omitting it (or
-setting it to `off`) preserves the original motion. The default medium value is
-applied to the bouncing-vector base pattern; other patterns are off unless
-their mapping is changed. The optional `allow_reversal` mapping field defaults
-to true for upward motion.
+setting it to `off`) preserves the original motion. Medium acceleration is
+enabled for the green spiral base pattern, and high acceleration for bouncing
+vectors; green channels and triggered patterns remain off unless their mapping
+is changed. Bouncing vectors launch before their orb's red flash, which begins
+100 ms later. Their upward travel fades steeply near the top. The optional
+`allow_reversal` mapping field defaults to true for upward motion.
 
 On the Raspberry Pi, connect the strip data line
 to the configured NeoPixel pin (default `D18`), and wire a normally-open

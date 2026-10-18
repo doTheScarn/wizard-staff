@@ -5,9 +5,9 @@
 # med (4), and high (6) physical wraps per second squared. Upward motion may
 # reverse under gravity by default; set allow_reversal=False to stop and fade.
 BASE_PATTERN_OPTIONS = {
-    "green_spiral": {},
+    "green_spiral": {"downward_acceleration": "med"},
     "green_channels": {},
-    "bounce_vectors": {"downward_acceleration": "med"},
+    "bounce_vectors": {"downward_acceleration": "high"},
 }
 
 

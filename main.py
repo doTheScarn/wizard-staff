@@ -31,6 +31,8 @@ def parse_args():
     parser.add_argument("--frame-rate", type=float, default=60)
     parser.add_argument("--brightness", type=float, default=1.0,
                         help="Additional hardware output multiplier (default: 1.0).")
+    parser.add_argument("--orb-gain", type=float, default=1.5,
+                        help="Independent orb intensity multiplier (default: 1.5).")
     parser.add_argument("--gamma", type=float, default=2.2,
                         help="Perceived color/fade correction; 1.0 disables it (default: 2.2).")
     parser.add_argument("--led-pin", default="D18")
@@ -41,7 +43,7 @@ def parse_args():
     parser.add_argument("--button-gpio", type=int, default=17)
     parser.add_argument("--virtual-button", choices=("cycle", "input"),
                         help="Cycle gestures with numbered base gaps, or enter "
-                             "1-3 for base patterns, a-j for patterns, s for an "
+                             "1-4 for base patterns, a-j for patterns, s for an "
                              "interactive shot, and x to exit that mode; "
                              "overrides the GPIO button.")
     parser.add_argument("--dry-run", action="store_true")
@@ -88,7 +90,7 @@ def main():
                          baseline_shaft_brightness=BASELINE_SHAFT_BRIGHTNESS,
                          baseline_orb_brightness=BASELINE_ORB_BRIGHTNESS,
                          max_brightness=MAX_BRIGHTNESS,
-                         gamma=args.gamma,
+                         gamma=args.gamma, orb_gain=args.orb_gain,
                          led_pin=args.led_pin, data_start=args.data_start,
                          pixel_order=args.pixel_order,
                          color_mapping=args.color_mapping, button_gpio=args.button_gpio)

@@ -10,7 +10,7 @@ from .effects import (
     release_burst_duration,
     upward_spiral_effect_duration,
 )
-from .spell_effects import SPELL_DURATIONS
+from .spell_effects import SPELL_DURATIONS, spell_duration
 
 PATTERN_ROWS = (
     ("a", "a", "Descent fill"),
@@ -20,19 +20,19 @@ PATTERN_ROWS = (
     ("c", "c", "Channel wave"),
     ("base_c", "3", "Bouncing vectors"),
     ("d", "d", "Charge / release burst"),
-    ("base_d", "1", "Green spiral"),
+    ("base_d", "4", "Spring streams"),
     ("e", "e", "Opposed pairs"),
-    ("base_e", "2", "Green channels"),
+    ("base_e", "1", "Green spiral"),
     ("f", "f", "Stacking drops / unload"),
-    ("base_f", "3", "Bouncing vectors"),
+    ("base_f", "2", "Green channels"),
     ("g", "g", "Interactive red shots"),
     ("base_g", "1", "Green spiral"),
     ("h", "h", "Twisting ribbons"),
-    ("base_h", "2", "Green channels"),
+    ("base_h", "4", "Spring streams"),
     ("i", "i", "Gathering spell"),
-    ("base_i", "3", "Bouncing vectors"),
+    ("base_i", "1", "Green spiral"),
     ("j", "j", "American flag"),
-    ("base_j", "1", "Green spiral"),
+    ("base_j", "2", "Green channels"),
 )
 PATTERN_NAMES = {key: name for key, _, name in PATTERN_ROWS}
 EFFECT_LENGTHS = {
@@ -96,6 +96,9 @@ def status_snapshot(staff, player, now):
             remaining = (staff.effect_started_at +
                          opposed_pair_effect_duration(staff.geometry,
                                                       staff.effect_options) - now)
+        elif effect == "gathering_spell":
+            remaining = (staff.effect_started_at +
+                         spell_duration(effect, staff.geometry, staff.effect_options) - now)
         elif effect == "interactive_red_shots":
             remaining = None
         elif effect == "descent_fill":

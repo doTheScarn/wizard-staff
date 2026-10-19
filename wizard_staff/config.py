@@ -13,6 +13,7 @@ class StaffConfig:
     baseline_orb_brightness: float = 0.2
     max_brightness: float = 0.5
     gamma: float = 2.2
+    orb_gain: float = 1.5
     led_pin: str = "D18"
     data_start: str = "bottom"
     pixel_order: str = "RGB"
@@ -33,6 +34,8 @@ class StaffConfig:
             raise ValueError("turns_per_repeat must be 1 or 2")
         if self.frame_rate <= 0 or not 0 < self.brightness <= 1:
             raise ValueError("frame_rate and hardware brightness must be positive")
+        if not 0 <= self.orb_gain <= 4:
+            raise ValueError("orb_gain must be between 0 and 4")
         if not 1.0 <= self.gamma <= 3.5:
             raise ValueError("gamma must be between 1.0 (off) and 3.5")
         if not all(0 <= value <= 1 for value in

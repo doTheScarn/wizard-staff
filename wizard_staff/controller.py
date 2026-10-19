@@ -105,6 +105,7 @@ class WizardStaff:
                       orb_leds=self.geometry.orb_leds,
                       baseline_shaft_brightness=self.config.baseline_shaft_brightness,
                       baseline_orb_brightness=self.config.baseline_orb_brightness,
+                      orb_gain=self.config.orb_gain,
                       gamma=(self.effect_options.get("gamma", self.config.gamma)
                              if self.effect is not None else self.config.gamma))
 

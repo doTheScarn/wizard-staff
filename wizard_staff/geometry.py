@@ -37,6 +37,16 @@ class StaffGeometry:
     def channels(self):
         return tuple(self.channel(i) for i in range(self.leds_per_repeat))
 
+    def spiral_channel(self, phase):
+        """A spring along the physical helix, activating literally every third LED."""
+        if not 0 <= phase < 3:
+            raise ValueError("spiral phase must be 0, 1, or 2")
+        return self.stem[phase::3]
+
+    @property
+    def spiral_channels(self):
+        return tuple(self.spiral_channel(phase) for phase in range(3))
+
     @property
     def unset_indicator(self):
         return self.stem[:4]

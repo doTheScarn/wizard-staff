@@ -43,13 +43,14 @@ def palette_color(palette, fraction):
 
 
 def palette_trail(path, palette, position, length=4, brightness=1.0,
-                  direction=1, brightness_override=None):
+                  direction=1, brightness_override=None, tail_brightness=1.0,
+                  head_length=1):
     """A colored head, changing hue and fading toward the end of its tail."""
     samples = []
     for index in range(length):
         fraction = index / max(1, length - 1)
         color = palette_color(palette, fraction)
-        fade = 1 - index / length
+        fade = (1 - index / length) * (1 if index < head_length else tail_brightness)
         samples.append((-direction * index,
                         tuple(round(channel * fade) for channel in color)))
     return LightVector(tuple(path), tuple(samples), position,
@@ -73,7 +74,7 @@ def _gamma_level(value, table, gamma):
 
 def render(vectors, total_leds, orb_leds=None,
            baseline_shaft_brightness=1.0, baseline_orb_brightness=1.0,
-           gamma=1.0):
+           gamma=1.0, orb_gain=1.0):
     # Convert authored colors/envelopes to PWM intensity before adding light.
     # Region/override multipliers and fractional spatial coverage stay linear.
     table = _gamma_table(gamma) if gamma != 1.0 else None
@@ -101,6 +102,8 @@ def render(vectors, total_leds, orb_leds=None,
                 if scale is None:
                     scale = (baseline_orb_brightness if orb_leds is not None and
                              led < orb_leds else baseline_shaft_brightness)
+                if orb_leds is not None and led < orb_leds:
+                    scale *= orb_gain
                 for channel in range(3):
                     frame[led][channel] += levels[channel] * scale * weight
     return [tuple(max(0, min(255, round(c))) for c in led) for led in frame]

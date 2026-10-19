@@ -48,7 +48,7 @@ class VirtualButtonPlayer:
 
     def enqueue(self, text):
         key = text.strip().lower()
-        if key not in LABELS and key not in ("1", "2", "3"):
+        if key not in LABELS and key not in ("1", "2", "3", "4"):
             return False
         self.pending.append(key)
         return True
@@ -59,7 +59,8 @@ class VirtualButtonPlayer:
             config.quick_press_max_s - config.debounce_s) / 4
         gap = (config.debounce_s + config.multi_press_s) / 2
         medium = (config.quick_press_max_s + config.long_press_s) / 2
-        hold = config.long_press_s + HOLD_EFFECT_SECONDS + config.debounce_s
+        hold_seconds = HOLD_EFFECT_SECONDS + (1.0 if key == "f" else 0.0)
+        hold = config.long_press_s + hold_seconds + config.debounce_s
         # The classifier starts its hold timer only after the press debounce.
         # Keep the raw signal asserted long enough to cross that threshold.
         exit_hold = config.long_press_s + 2 * config.debounce_s + 0.02
@@ -138,7 +139,8 @@ class VirtualButtonPlayer:
                 self.base_until = now + BASE_INTERVAL_SECONDS
                 self.base_after_key = finished_key
                 self.base_number = (1 if finished_key == "g" else
-                                    ((self.next_cycle_index - 1) % 3) + 1)
+                                    (next(index for index, (key, _) in enumerate(CYCLE_GESTURES)
+                                          if key == finished_key) % 4) + 1)
                 self.base_selection = self.base_number
                 self.announcements.append(
                     f"Base pattern {self.base_number} for 5 seconds")
@@ -170,7 +172,7 @@ class VirtualButtonPlayer:
                     self._start(key, now)
             elif self.pending:
                 key = self.pending.popleft()
-                if key in ("1", "2", "3"):
+                if key in ("1", "2", "3", "4"):
                     self.base_selection = int(key)
                     self.announcements.append(f"Base pattern {key}")
                 else:

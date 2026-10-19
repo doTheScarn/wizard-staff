@@ -8,11 +8,13 @@ BASE_PATTERN_OPTIONS = {
     "green_spiral": {"downward_acceleration": "low"},
     "green_channels": {},
     "bounce_vectors": {"downward_acceleration": "low"},
+    "spring_streams": {},
 }
 
 
 PATTERN_OPTIONS = {
-    "quick": {"sequence": ("short",), "effect": "descent_fill"},
+    "quick": {"sequence": ("short",), "effect": "descent_fill",
+              "downward_acceleration": "low"},
     "medium": {"sequence": ("medium",), "effect": "channel_wave",
                "extend_on_hold": True},
     "double_quick": {"sequence": ("short", "short"),
@@ -22,7 +24,7 @@ PATTERN_OPTIONS = {
     "medium_quick": {"sequence": ("medium", "short"),
                      "effect": "twisting_ribbons"},
     "double_medium": {"sequence": ("medium", "medium"),
-                      "effect": "gathering_spell"},
+                      "effect": "gathering_spell", "upward_acceleration": "high"},
     "short_short_short": {"sequence": ("short", "short", "short"),
                           "effect": "interactive_red_shots", "interactive": True},
     "short_short_medium": {"sequence": ("short", "short", "medium"),

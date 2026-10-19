@@ -93,9 +93,9 @@ def twisting_ribbons(elapsed, geometry, max_brightness):
         vectors.append(LightVector(path, tuple(samples), brightness=fade,
                                    brightness_override=0.65 * max_brightness))
     # A quiet release after the stem fades gives the effect an ending.
-    if 4.2 <= elapsed < 5.0:
-        age = elapsed - 4.2
-        level = math.sin(math.pi * age / 0.8) ** 2
+    if 4.0 <= elapsed < 5.0:
+        age = elapsed - 4.0
+        level = math.sin(math.pi * age) ** 2
         vectors.append(solid(geometry.orb, (30, 115, 255), 0.5 * level,
                              brightness_override=max_brightness))
     return vectors, False

@@ -43,6 +43,7 @@ class VirtualButtonPlayer:
         self.base_after_key = None
         self.base_selection = None
         self.announcements = []
+        self.interrupt_requested = False
         self.interactive_cycle_started_at = None
         self.interactive_cycle_exiting = False
 
@@ -113,10 +114,26 @@ class VirtualButtonPlayer:
         """Return the raw button state to pass to WizardStaff.step()."""
         self.announcements = []
         self.base_selection = None
+        self.interrupt_requested = False
+        if self.mode == "input" and self.pending and self.pending[0] in ("1", "2", "3", "4"):
+            self.current_key = None
+            self.base_selection = int(self.pending.popleft())
+            self.interrupt_requested = True
+            self.announcements.append(f"Base pattern {self.base_selection}")
+            return False
+        if (self.mode == "input" and self.current_key is not None and self.pending
+                and effect_active and self.effect_seen
+                and not (interactive and self.pending[0] in ("s", "x"))):
+            # A new pattern can interrupt a simulated hold or an active effect.
+            # Interactive shot commands retain their independent tap timing.
+            self.current_key = None
+        if (self.mode == "input" and self.current_key is not None and
+                now - self.started_at >= self.script_end):
+            self.current_key = None
         if (self.mode == "cycle" and
                 (self.interactive_cycle_exiting or
                  self.interactive_cycle_started_at is not None) and
-                not interactive):
+                not interactive and not effect_active):
             self.interactive_cycle_started_at = None
             self.interactive_cycle_exiting = False
             self.base_until = now + BASE_INTERVAL_SECONDS
@@ -161,7 +178,7 @@ class VirtualButtonPlayer:
                 return any(start <= elapsed < end for start, end in intervals)
 
         if (self.current_key is None and
-                (not effect_active or interactive) and
+                (self.mode == "input" or not effect_active or interactive) and
                 self.interactive_cycle_started_at is None and
                 not self.interactive_cycle_exiting):
             if self.mode == "cycle":
@@ -176,6 +193,7 @@ class VirtualButtonPlayer:
                     self.base_selection = int(key)
                     self.announcements.append(f"Base pattern {key}")
                 else:
+                    self.interrupt_requested = not (interactive and key in ("s", "x"))
                     self._start(key, now)
 
         if self.current_key is None:

@@ -1,5 +1,6 @@
 """In-place terminal status for the virtual button cycle."""
 
+from .controller import EFFECT_FADE_SECONDS
 from .effects import (
     CHANNEL_WAVE_TOTAL_SECONDS,
     DESCENT_TOTAL_SECONDS,
@@ -111,6 +112,10 @@ def status_snapshot(staff, player, now):
                                                 staff.effect_options) - now)
         else:
             remaining = staff.effect_started_at + EFFECT_LENGTHS[effect] - now
+        if staff.fade_started_at is not None:
+            remaining = staff.fade_started_at + EFFECT_FADE_SECONDS - now
+        elif remaining is not None and effect not in ("charge", "stack_drop"):
+            remaining += EFFECT_FADE_SECONDS
         key = EFFECT_ROWS[effect]
     else:
         if player.base_until is not None and now < player.base_until:

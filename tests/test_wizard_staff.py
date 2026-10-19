@@ -344,6 +344,7 @@ class WizardStaffTests(unittest.TestCase):
         arrival = shots.vectors(0.4)
         self.assertEqual(sum(vector.path == geometry.orb for vector in arrival), 1)
         staff.trigger("interactive_exit", 0.41)
+        staff.step(0.92)
         self.assertIsNone(staff.effect)
         self.assertIsNone(staff.interactive_shots)
 
@@ -359,9 +360,10 @@ class WizardStaffTests(unittest.TestCase):
         staff.step(0.5, True)
         staff.step(0.54, True)
         staff.step(1.40, True)
-        self.assertIsNone(staff.effect)
+        self.assertIsNotNone(staff.fade_started_at)
         staff.step(1.45, False)
         staff.step(1.49, False)
+        staff.step(1.91, False)
         self.assertIsNone(staff.effect)
 
     def test_a_fill_retains_brightness_and_reverses_falling_head(self):
@@ -594,6 +596,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(staff.effect, "opposed_pairs")
         self.assertTrue(any(pixel != (0, 0, 0) for pixel in frame[2:]))
         staff.step(12.0)
+        staff.step(12.51)
         self.assertIsNone(staff.effect)
 
     def test_opposed_pairs_launch_and_clear(self):
@@ -641,6 +644,7 @@ class WizardStaffTests(unittest.TestCase):
                 self.assertEqual(staff.effect, effect)
                 self.assertAlmostEqual(staff.extension_stop_at, 5.14)
                 staff.step(6.5, False)
+                staff.step(7.01, False)
                 self.assertIsNone(staff.effect)
 
     def test_release_stops_new_pairs_and_wave_clears_upward(self):
@@ -766,6 +770,7 @@ class WizardStaffTests(unittest.TestCase):
         staff.step(3.14, False)
         self.assertEqual(staff.effect, "stack_unload")
         staff.step(7.0)
+        staff.step(7.51)
         self.assertIsNone(staff.effect)
 
     def test_virtual_interactive_shots_overlap_and_x_exits(self):
@@ -808,6 +813,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(staff.effect, "descent_fill")
         self.assertEqual(staff.step(1.3)[:2], [(0, 0, 0)] * 2)
         staff.step(5.1)
+        staff.step(5.61)
         self.assertIsNone(staff.effect)
         staff.trigger("hold_start", 6.0)
         staff.step(7.5)
@@ -815,6 +821,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(staff.effect, "release_burst")
         self.assertAlmostEqual(staff.charge_time, 1.6)
         staff.step(9.4)
+        staff.step(9.91)
         self.assertIsNone(staff.effect)
 
     def test_virtual_button_cycle_runs_every_gesture_with_base_gaps(self):
@@ -981,7 +988,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(key, "f")
         self.assertGreater(seconds, 0)
         self.assertEqual(status_snapshot(staff, player,
-                         staff.effect_started_at + staff.stack_effect.unload_finish_at)[1],
+                         staff.effect_started_at + staff.stack_effect.unload_finish_at + 0.5)[1],
                          0)
 
 

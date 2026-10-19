@@ -8,7 +8,7 @@ from .motion import directional_acceleration, position, time_to_position
 from .spell_effects import STACK_COLORS
 from .vectors import trail, solid
 
-SPRING_INTERVAL_SECONDS = 0.6
+SPRING_INTERVAL_SECONDS = 1.0
 SPRING_SPEED_WRAPS = (12.0, 22.0)
 SPRING_TAIL_WRAPS = 8
 
@@ -58,7 +58,8 @@ def spring_vectors(elapsed, geometry, max_brightness):
                                     directional_acceleration("low", 1, units), 1)
     newest = int(elapsed // SPRING_INTERVAL_SECONDS)
     oldest = max(0, newest - math.ceil(max_lifetime / SPRING_INTERVAL_SECONDS) - 1)
-    vectors = [solid(geometry.orb, (120, 180, 255), 0.35)]
+    vectors = [solid(geometry.orb, (120, 180, 255), 0.85,
+                     brightness_override=max_brightness)]
     for group in range(oldest, newest + 1):
         age = elapsed - group * SPRING_INTERVAL_SECONDS
         for launch in spring_launches(group, geometry):
@@ -68,5 +69,5 @@ def spring_vectors(elapsed, geometry, max_brightness):
                             launch.acceleration, age)
             vectors.append(trail(launch.path, launch.color, head,
                                  length=launch.length, direction=launch.direction,
-                                 brightness_override=max_brightness))
+                                 brightness_override=0.5 * max_brightness, tail_power=2.0))
     return vectors

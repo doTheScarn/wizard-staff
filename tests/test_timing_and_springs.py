@@ -132,7 +132,7 @@ class TimingAndSpringTests(unittest.TestCase):
         self.assertGreater(len(colors), 4)
         self.assertGreater(len(speeds), 10)
         self.assertEqual(len(accelerations), 3)
-        self.assertGreater(len(spring_vectors(1.3, self.geometry, 0.5)), 5)
+        self.assertEqual(len(spring_vectors(1.3, self.geometry, 0.5)), 5)
         self.assertLess(len(spring_vectors(100000, self.geometry, 0.5)), 30)
         staff = WizardStaff(self.config)
         staff.select_base_pattern(4, 0)
@@ -146,3 +146,103 @@ class TimingAndSpringTests(unittest.TestCase):
                         solid((led,), (255, 0, 255), brightness_override=0.5)],
                        self.geometry.total_leds)
         self.assertEqual(frame[led], (255, 0, 255))
+
+
+class HandoffAndInputTests(unittest.TestCase):
+    @staticmethod
+    def input_step(staff, player, now):
+        pressed = player.tick(now, staff.effect is not None,
+                              staff.effect == "interactive_red_shots" and
+                              staff.fade_started_at is None)
+        if player.base_selection is not None:
+            staff.select_base_pattern(player.base_selection, now)
+        elif player.interrupt_requested:
+            staff.cancel_effect(reset_button=True)
+        return staff.step(now, pressed)
+
+    def test_effect_fades_all_channels_for_half_second_then_returns_to_base(self):
+        from wizard_staff.effects import descent_fill_duration
+        from wizard_staff.patterns import PATTERN_OPTIONS
+        staff = WizardStaff(StaffConfig())
+        staff.trigger("quick", 0)
+        end = descent_fill_duration(staff.geometry, PATTERN_OPTIONS["quick"])
+        previous = staff.step(end - 0.01)
+        first = staff.step(end + 0.01)
+        self.assertEqual(first, previous)
+        self.assertIsNotNone(staff.fade_started_at)
+        half = staff.step(end + 0.26)
+        self.assertTrue(all(abs(actual - expected * 0.5) <= 1
+                            for rgb, source in zip(half, first)
+                            for actual, expected in zip(rgb, source)))
+        black = staff.step(end + 0.52)
+        self.assertFalse(any(any(rgb) for rgb in black))
+        self.assertIsNone(staff.effect)
+        self.assertTrue(any(any(rgb) for rgb in staff.step(end + 0.54)))
+
+    def test_new_input_interrupts_simulated_hold_after_normal_classification(self):
+        staff = WizardStaff(StaffConfig())
+        player = VirtualButtonPlayer(staff.config, "input")
+        player.enqueue("f")
+        for frame in range(100):
+            self.input_step(staff, player, frame / 60)
+        self.assertEqual(staff.effect, "stack_drop")
+        player.enqueue("a")
+        self.input_step(staff, player, 1.7)
+        self.assertTrue(player.interrupt_requested)
+        self.assertIsNone(staff.effect)
+        # The ordinary multi-press window is preserved, rather than bypassed.
+        for frame in range(103, 130):
+            self.input_step(staff, player, frame / 60)
+        self.assertIsNone(staff.effect)
+        for frame in range(130, 150):
+            self.input_step(staff, player, frame / 60)
+        self.assertEqual(staff.effect, "descent_fill")
+
+    def test_numbered_input_interrupts_fade_immediately(self):
+        staff = WizardStaff(StaffConfig())
+        player = VirtualButtonPlayer(staff.config, "input")
+        staff.trigger("medium", 0)
+        staff.step(2.9)
+        staff.step(3.1)
+        self.assertIsNotNone(staff.fade_started_at)
+        player.enqueue("4")
+        self.input_step(staff, player, 3.11)
+        self.assertIsNone(staff.effect)
+        self.assertIsNone(staff.fade_started_at)
+        self.assertEqual(staff.selected_base, "spring_streams")
+
+    def test_already_black_effect_does_not_flash_old_frame_back_on(self):
+        staff = WizardStaff(StaffConfig())
+        staff.trigger("short_short_medium", 0)
+        staff.step(7.99)
+        frame = staff.step(8.01)
+        self.assertFalse(any(any(rgb) for rgb in frame))
+        self.assertIsNone(staff.effect)
+
+    def test_spring_launch_rate_tail_and_peak(self):
+        geometry = StaffGeometry.from_config(StaffConfig())
+        before = spring_vectors(0.99, geometry, 0.5)
+        after = spring_vectors(1.01, geometry, 0.5)
+        self.assertEqual(len(before), 3)
+        self.assertEqual(len(after), 5)
+        for vector in after[1:]:
+            self.assertEqual(vector.brightness_override, 0.25)
+            peak = sum(vector.samples[0][1])
+            middle = sum(vector.samples[len(vector.samples) // 2][1])
+            self.assertLess(middle, peak * 0.3)
+        self.assertGreater(after[0].brightness, 0.8)
+        self.assertEqual(after[0].brightness_override, 0.5)
+
+    def test_b_slower_flash_preserves_group_launch_schedule(self):
+        geometry = StaffGeometry.from_config(StaffConfig())
+        _, speed, _ = upward_spiral_timing(len(geometry.stem), geometry)
+        arrival = len(geometry.stem) / speed
+        vectors, _ = manual_vectors("upward_spirals", arrival + 0.4, geometry)
+        flashes = [v for v in vectors if v.path == geometry.orb][1:]
+        self.assertTrue(flashes)
+        self.assertGreater(flashes[0].brightness, 0)
+        self.assertGreater(flashes[0].brightness_override, 0.5)
+        before, _ = manual_vectors("upward_spirals", 0.65 - 0.001, geometry)
+        after, _ = manual_vectors("upward_spirals", 0.65, geometry)
+        self.assertEqual(len([v for v in before if v.path == geometry.stem]), 3)
+        self.assertEqual(len([v for v in after if v.path == geometry.stem]), 6)

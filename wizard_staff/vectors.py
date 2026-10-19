@@ -25,8 +25,8 @@ def solid(path, color, brightness=1.0, brightness_override=None):
 
 
 def trail(path, color, position, length=4, brightness=1.0, direction=1,
-          wrap=False, brightness_override=None):
-    samples = tuple((-direction * i, tuple(round(c * (1 - i / length))
+          wrap=False, brightness_override=None, tail_power=1.0):
+    samples = tuple((-direction * i, tuple(round(c * (1 - i / length) ** tail_power)
                                       for c in color)) for i in range(length))
     return LightVector(tuple(path), samples, position, brightness, wrap,
                        brightness_override)

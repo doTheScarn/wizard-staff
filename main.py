@@ -151,9 +151,11 @@ def main():
             if virtual_button is not None:
                 pressed = virtual_button.tick(
                     now, staff.effect is not None,
-                    staff.effect == "interactive_red_shots")
+                    staff.effect == "interactive_red_shots" and staff.fade_started_at is None)
                 if virtual_button.base_selection is not None:
                     staff.select_base_pattern(virtual_button.base_selection, now)
+                elif virtual_button.interrupt_requested:
+                    staff.cancel_effect(reset_button=True)
                 if cycle_status is None:
                     for announcement in virtual_button.announcements:
                         print(announcement, flush=True)

@@ -71,11 +71,12 @@ Without virtual-button selection, the base patterns cycle every 18 seconds:
    Two flights overlap. A returning light remains absent for 200 ms before its
    replacement launches. The brighter orange orb gives a red cue 60 ms before
    each drop.
-4. Spring streams use three literal every-third-LED paths. Every 0.6 s, one
+4. Spring streams use three literal every-third-LED paths. Every 1.0 s, one
    vector launches down from the top and another up from the bottom. Each
    independently chooses a path, a familiar palette color, an initial speed
    between 12 and 22 wraps/s, and low/medium/high acceleration toward its
-   destination. Tails span eight wraps. Vectors can cross and overtake;
+   destination. Vectors run at half the former intensity with quadratic, eight-wrap fading
+   tails. The orb is much brighter. Vectors can cross and overtake;
    overlapping RGB contributions add and clip only at 255.
 
 Rainbow sparks remain available in code but are out of the cycle.
@@ -85,7 +86,7 @@ The button has software debounce and a 0.38-second multi-press window:
 | Gesture | Slot | Effect |
 | --- | --- | --- |
 | One quick press | a | Icy blue/violet tail descends, then leads a dim red fill back up with low acceleration; the fill follows the ring position; orb flashes |
-| Two quick presses | b | Growing groups of varied, two-wrap upward trails; quiet yellow orb flashes brighter blue on the first light arrival, with a 15 ms rise and 240 ms fade |
+| Two quick presses | b | Growing groups of varied, two-wrap upward trails; quiet yellow orb flashes brighter blue on the first light arrival, with a 15 ms rise and 600 ms fade |
 | Medium press | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating one column per second under a subdued white orb |
 | Long press and hold | d | Slower upward lights and a blue orb while held; release pauses for 200 ms with the orb blue before launching the burst; the orb stays blue until the first burst vector arrives, then bright purple with rapid white flashes |
 | Quick press then medium press | e | Original alternating blue and green pairs with linear 30-wrap fading tails launch from the center toward both ends twice per second; orb stays dark |
@@ -114,6 +115,12 @@ sequences show the brief red unset indicator:
 | Medium, short, medium | Unassigned |
 | Medium, medium, short | Unassigned |
 | Medium, medium, medium | Unassigned |
+
+All triggered patterns use a half-second fade-to-black handoff before returning
+to a base pattern. The handoff fades the last displayed frame, including the
+orb, without restarting launches. Effects that have already faded completely
+stay black rather than reviving an old frame. A new explicit input command or
+base selection interrupts the handoff; base patterns do not fade automatically.
 
 Button timings are in `wizard_staff/config.py`; slot assignments and optional
 pattern flags are in `wizard_staff/patterns.py`. New spell choreography and
@@ -158,8 +165,11 @@ a base pattern, `a` through `j` to simulate a gesture, `s` to launch an
 interactive shot, or `x` to simulate a long press and exit interactive mode.
 The input mode prints the complete pattern list and command options at startup.
 Type `q` to quit.
-Commands entered while a finite effect is running are queued; `s` and `x` can
-also be entered while interactive mode is active.
+Input mode starts new gesture commands without waiting for an active effect to
+finish, and can interrupt a simulated hold. A numbered base selection switches
+immediately. Gesture commands still pass through the normal press durations,
+debounce, and multi-press window. Base patterns, including 4, do not wait for
+vectors to clear. `s` and `x` retain their interactive shot/exit behavior.
 Hold gestures stay active for about five seconds before release; f holds for
 six seconds to demonstrate drops continuing after the stacks fill. A selected
 base pattern resumes after a triggered effect.

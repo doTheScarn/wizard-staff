@@ -27,7 +27,7 @@ BOUNCE_FLASH_SECONDS = 0.1
 BOUNCE_FLASH_LEAD_SECONDS = 0.06
 STACK_FLASH_SEQUENCE_SECONDS = 0.36
 STACK_WHITE_HOLD_SECONDS = 0.4
-STACK_FADE_SECONDS = 0.15
+STACK_FADE_SECONDS = 0.5
 OPPOSED_PAIR_WRAPS = 30
 OPPOSED_PAIR_INTERVAL_SECONDS = 0.5
 OPPOSED_PAIR_LAUNCH_SECONDS = 3.0
@@ -37,6 +37,8 @@ DESCENT_HOLD_SECONDS = 1.0
 DESCENT_TOTAL_SECONDS = (DESCENT_FALL_SECONDS + DESCENT_FILL_SECONDS +
                         DESCENT_HOLD_SECONDS)
 CHANNEL_WAVE_TOTAL_SECONDS = 3.0
+UPWARD_FLASH_ATTACK_SECONDS = 0.015
+UPWARD_FLASH_FADE_SECONDS = 0.6
 RELEASE_BURST_SECONDS = 1.5
 RELEASE_DELAY_SECONDS = 0.2
 UNSET_INDICATOR_SECONDS = 0.45
@@ -316,6 +318,7 @@ def upward_spiral_timing(stem_length, geometry=None, options=None):
     rise_speed = (stem_length + tail_length + 1) / 0.9
     group_lifetime = (stem_length * 1.2 + tail_length + 1) / rise_speed + 0.12
     options = options or {}
+    acceleration = 0.0
     if options.get("downward_acceleration") not in (None, "off"):
         units_per_wrap = (geometry.leds_per_repeat / geometry.turns_per_repeat
                           if geometry is not None else 4.0)
@@ -340,6 +343,11 @@ def upward_spiral_timing(stem_length, geometry=None, options=None):
                                               direction=1) or group_lifetime)
             lifetimes.append(lifetime)
         group_lifetime = max(lifetimes)
+    first_arrival = time_to_position(stem_length, 0, -rise_speed,
+                                     acceleration, direction=-1)
+    if first_arrival is not None:
+        group_lifetime = max(group_lifetime, first_arrival +
+                             UPWARD_FLASH_ATTACK_SECONDS + UPWARD_FLASH_FADE_SECONDS)
     return group_interval, rise_speed, group_lifetime
 
 
@@ -808,12 +816,14 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
                     direction=direction, brightness=fade * strength))
             arrival = started + arrivals[0] if arrivals[0] is not None else None
             flash_age = elapsed - arrival if arrival is not None else -1
-            if 0 <= flash_age < 0.255:
+            if 0 <= flash_age < UPWARD_FLASH_ATTACK_SECONDS + UPWARD_FLASH_FADE_SECONDS:
                 # Fast but finite attack, followed by a softer quadratic decay.
-                level = (flash_age / 0.015 if flash_age < 0.015 else
-                         (1 - (flash_age - 0.015) / 0.24) ** 2)
+                level = (flash_age / UPWARD_FLASH_ATTACK_SECONDS
+                         if flash_age < UPWARD_FLASH_ATTACK_SECONDS else
+                         (1 - (flash_age - UPWARD_FLASH_ATTACK_SECONDS) /
+                          UPWARD_FLASH_FADE_SECONDS) ** 2)
                 vectors.append(solid(geometry.orb, (100, 170, 255), level,
-                                     brightness_override=max_brightness))
+                                     brightness_override=1.35 * max_brightness))
         return vectors, False
 
     if name == "channel_wave":

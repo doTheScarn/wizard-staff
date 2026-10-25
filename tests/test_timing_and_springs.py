@@ -86,7 +86,7 @@ class TimingAndSpringTests(unittest.TestCase):
 
     def test_g_strong_head_and_dim_tail(self):
         staff = WizardStaff(self.config)
-        staff.trigger("short_short_short", 0)
+        staff.trigger("dit_dit_dit", 0)
         staff.trigger("interactive_shot", 0)
         vector = staff.interactive_shots.vectors(0.1)[0]
         self.assertGreater(vector.samples[0][1][0], 3 * vector.samples[2][1][0])
@@ -164,8 +164,8 @@ class HandoffAndInputTests(unittest.TestCase):
         from wizard_staff.effects import descent_fill_duration
         from wizard_staff.patterns import PATTERN_OPTIONS
         staff = WizardStaff(StaffConfig())
-        staff.trigger("quick", 0)
-        end = descent_fill_duration(staff.geometry, PATTERN_OPTIONS["quick"])
+        staff.trigger("dit", 0)
+        end = descent_fill_duration(staff.geometry, PATTERN_OPTIONS["dit"])
         previous = staff.step(end - 0.01)
         first = staff.step(end + 0.01)
         self.assertEqual(first, previous)
@@ -201,7 +201,7 @@ class HandoffAndInputTests(unittest.TestCase):
     def test_numbered_input_interrupts_fade_immediately(self):
         staff = WizardStaff(StaffConfig())
         player = VirtualButtonPlayer(staff.config, "input")
-        staff.trigger("medium", 0)
+        staff.trigger("dah", 0)
         staff.step(2.9)
         staff.step(3.1)
         self.assertIsNotNone(staff.fade_started_at)
@@ -213,7 +213,7 @@ class HandoffAndInputTests(unittest.TestCase):
 
     def test_already_black_effect_does_not_flash_old_frame_back_on(self):
         staff = WizardStaff(StaffConfig())
-        staff.trigger("short_short_medium", 0)
+        staff.trigger("dit_dit_dah", 0)
         staff.step(7.99)
         frame = staff.step(8.01)
         self.assertFalse(any(any(rgb) for rgb in frame))

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from .vectors import LightVector, palette_color, palette_trail, solid, trail
 from .motion import downward_acceleration, position as motion_position, time_to_position
-from .spell_effects import (EMBER_PALETTE, MIST_PALETTE, RED_PALETTE,
+from .spell_effects import (EMBER_PALETTE, MIST_PALETTE,
                            SPELL_NAMES, spell_vectors, STACK_COLORS)
 from .spring_effects import spring_vectors
 
@@ -639,10 +639,9 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
 
 
 class InteractiveRedShots:
-    """Persistent tap-triggered upward red shots with a fading orb arrival."""
+    """Two solid red wraps per tap, with a fading orb arrival."""
 
-    TRAVEL_SECONDS = 0.4
-    TAIL_WRAPS = 8
+    TRAVEL_SECONDS = 0.4 / 1.3
     FLASH_SECONDS = 0.2
 
     def __init__(self, geometry, max_brightness=0.5,
@@ -654,9 +653,16 @@ class InteractiveRedShots:
             geometry.leds_per_repeat / geometry.turns_per_repeat)
         self.allow_reversal = allow_reversal
         self.launched_at = []
-        self.tail_length = max(1, round(
-            self.TAIL_WRAPS * geometry.leds_per_repeat /
-            geometry.turns_per_repeat))
+        wrap_length = geometry.leds_per_repeat / geometry.turns_per_repeat
+        samples_by_level = {}
+        for i in range(math.ceil(2 * wrap_length)):
+            # Split a boundary LED's coverage when a physical wrap is fractional.
+            leading = max(0.0, min(1.0, wrap_length - i))
+            trailing = max(0.0, min(i + 1, 2 * wrap_length) - max(i, wrap_length))
+            level = leading + trailing / 3
+            samples_by_level.setdefault(level, []).append((i, (255, 0, 0)))
+        self.wrap_samples = tuple((level, tuple(samples))
+                                  for level, samples in samples_by_level.items())
         self.speed = (len(geometry.stem) + 1) / self.TRAVEL_SECONDS
         self.arrival = (time_to_position(len(geometry.stem) - 1, -1,
                                          -self.speed, self.acceleration,
@@ -696,11 +702,12 @@ class InteractiveRedShots:
                 if self.arrival is None and not self.allow_reversal:
                     fade = max(0.0, 1 - (age - self.speed /
                                          self.acceleration) / self.FLASH_SECONDS)
-                vectors.append(palette_trail(
-                    stem, RED_PALETTE, head, length=self.tail_length,
-                    direction=direction, brightness=fade,
-                    brightness_override=self.max_brightness,
-                    tail_brightness=0.25, head_length=2))
+                for level, samples in self.wrap_samples:
+                    samples = tuple((-direction * offset, color)
+                                    for offset, color in samples)
+                    vectors.append(LightVector(
+                        stem, samples, head, brightness=fade,
+                        brightness_override=self.max_brightness * level))
             flash_age = age - self.arrival if self.arrival is not None else -1
             if 0 <= flash_age < self.FLASH_SECONDS:
                 orb_level = max(orb_level, 1 - flash_age / self.FLASH_SECONDS)

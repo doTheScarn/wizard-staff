@@ -9,6 +9,7 @@ import time
 from wizard_staff.config import StaffConfig
 from wizard_staff.controller import WizardStaff
 from wizard_staff.cycle_status import CycleStatusDisplay, PATTERN_ROWS
+from wizard_staff.patterns import PATTERN_OPTIONS
 from wizard_staff.virtual_button import VIRTUAL_GESTURES, VirtualButtonPlayer
 
 
@@ -51,14 +52,13 @@ def parse_args():
                         help="Print measured frame rate and update time every 2 seconds.")
     parser.add_argument("--seconds", type=float, default=None,
                         help="Stop after this many seconds (useful for a preview).")
-    parser.add_argument("--effect", choices=("quick", "double_quick", "medium",
-                                              "hold_start", "quick_medium",
-                                              "quick_hold_start",
-                                              "short_short_short",
-                                              "medium_quick", "double_medium",
-                                              "twisting_ribbons", "gathering_spell",
-                                              "short_short_medium", "american_flag",
-                                              "interactive_red_shots"),
+    effect_choices = tuple(dict.fromkeys(
+        (*PATTERN_OPTIONS,
+         *(name + "_start" for name, option in PATTERN_OPTIONS.items()
+           if option.get("hold")),
+         *(option["effect"] for option in PATTERN_OPTIONS.values()
+           if option.get("effect")))))
+    parser.add_argument("--effect", choices=effect_choices,
                         help="Start a slot immediately; useful with --dry-run.")
     args = parser.parse_args()
     if args.effect and args.virtual_button:

@@ -91,17 +91,17 @@ class WizardStaff:
             return
         if slot in ("interactive_exit_release",):
             return
-        if (slot in ("hold_start", "quick_hold_start") and
+        if (slot in ("hold_start", "dit_hold_start") and
                 self.extension_candidate is not None and
                 self.extension_candidate == self.effect):
             self.extension_held = True
             return
-        if slot in ("hold_release", "quick_hold_release") and self.extension_held:
+        if slot in ("hold_release", "dit_hold_release") and self.extension_held:
             self.extension_stop_at = max(0.0, now - self.effect_started_at)
             self.extension_held = False
             self.extension_candidate = None
             return
-        if slot == "quick_hold_release":
+        if slot == "dit_hold_release":
             if self.effect == "stack_drop":
                 self.stack_effect.release(now - self.effect_started_at)
                 self.effect = "stack_unload"

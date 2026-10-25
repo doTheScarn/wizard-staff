@@ -65,7 +65,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(frame, [(178, 0, 0), (51, 0, 0)])
 
         staff = WizardStaff(StaffConfig(orb_leds=1, stem_leds=8))
-        staff.trigger("quick", 0.0)
+        staff.trigger("dit", 0.0)
         fall, fill = descent_fill_timing(staff.geometry, {"downward_acceleration": "low"})
         self.assertEqual(max(staff.step(fall + fill + 0.05)[0]),
                          round(255 * 0.85 ** 2.2 * 0.5 * 1.5))
@@ -96,7 +96,7 @@ class WizardStaffTests(unittest.TestCase):
                         vector.samples[0][1][1] / vector.samples[0][1][0])
         self.assertLess(sum(vector.samples[-1][1]), sum(middle))
         staff = WizardStaff()
-        staff.trigger("short_short_medium", 0.0)
+        staff.trigger("dit_dit_dah", 0.0)
         self.assertTrue(any(sum(color) for color in staff.step(0.1)))
 
     def test_tire_pixel_color_mapping_matches_existing_strip(self):
@@ -265,7 +265,7 @@ class WizardStaffTests(unittest.TestCase):
 
     def test_opposed_pairs_keep_original_overlap_through_button_mapping(self):
         from wizard_staff.patterns import PATTERN_OPTIONS
-        options = PATTERN_OPTIONS["quick_medium"]
+        options = PATTERN_OPTIONS["dit_dah"]
         self.assertNotIn("downward_acceleration", options)
         vectors, done = manual_vectors("opposed_pairs", 0.55,
                                        StaffGeometry.from_config(StaffConfig()),
@@ -274,7 +274,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(len(vectors), 4)
         # Original linear ramp and pre-branch (uncorrected) brightness.
         staff = WizardStaff(StaffConfig())
-        staff.trigger("quick_medium", 0)
+        staff.trigger("dit_dah", 0)
         expected = render(vectors, staff.geometry.total_leds, gamma=1.0)
         self.assertEqual(staff.step(0.55), expected)
         for vector in vectors:
@@ -329,7 +329,7 @@ class WizardStaffTests(unittest.TestCase):
                                                          stem_leds=40))
         staff = WizardStaff(StaffConfig(orb_leds=2, stem_leds=40))
         staff.step(0.0)
-        staff.trigger("short_short_short", 0.1)
+        staff.trigger("dit_dit_dit", 0.1)
         dark = staff.step(0.1)
         self.assertEqual(dark, [(0, 0, 0)] * geometry.total_leds)
         self.assertEqual(status_snapshot(staff, VirtualButtonPlayer(
@@ -338,10 +338,10 @@ class WizardStaffTests(unittest.TestCase):
         shots = staff.interactive_shots
         shots.shoot(0.0)
         shots.shoot(0.2)
-        before_arrival = shots.vectors(0.39)
+        before_arrival = shots.vectors(shots.arrival - 0.01)
         self.assertEqual(sum(vector.path == geometry.orb for vector in before_arrival), 0)
-        self.assertEqual(sum(vector.path == geometry.stem for vector in before_arrival), 2)
-        arrival = shots.vectors(0.4)
+        self.assertEqual(sum(vector.path == geometry.stem for vector in before_arrival), 4)
+        arrival = shots.vectors(shots.arrival)
         self.assertEqual(sum(vector.path == geometry.orb for vector in arrival), 1)
         staff.trigger("interactive_exit", 0.41)
         staff.step(0.92)
@@ -351,7 +351,7 @@ class WizardStaffTests(unittest.TestCase):
     def test_interactive_button_tap_fires_and_hold_exits_without_ghost_event(self):
         staff = WizardStaff(StaffConfig(orb_leds=2, stem_leds=40))
         staff.step(0.0)
-        staff.trigger("short_short_short", 0.1)
+        staff.trigger("dit_dit_dit", 0.1)
         for now, pressed in ((0.2, True), (0.24, True),
                              (0.3, False), (0.34, False)):
             staff.step(now, pressed)
@@ -382,7 +382,7 @@ class WizardStaffTests(unittest.TestCase):
 
     def test_a_red_boundary_tracks_ring_with_or_without_acceleration(self):
         from wizard_staff.patterns import PATTERN_OPTIONS
-        self.assertEqual(PATTERN_OPTIONS["quick"]["downward_acceleration"], "low")
+        self.assertEqual(PATTERN_OPTIONS["dit"]["downward_acceleration"], "low")
         for size in (12, 269):
             geometry = StaffGeometry.from_config(StaffConfig(stem_leds=size))
             for level in ("off", "low", "med", "high"):
@@ -538,7 +538,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertEqual(at_arrival[0].samples[0][1], (170, 0, 220))
         self.assertEqual(at_arrival[1].samples[0][1], (255, 255, 255))
 
-    def test_button_debounce_single_double_medium_and_hold(self):
+    def test_button_debounce_dit_double_dit_dah_and_hold(self):
         config = StaffConfig()
         button = ButtonInterpreter(config)
 
@@ -551,7 +551,7 @@ class WizardStaffTests(unittest.TestCase):
         sample(0.14, True)
         sample(0.24, False)
         self.assertEqual(sample(0.28, False), [])
-        self.assertEqual(sample(0.67, False), ["quick"])
+        self.assertEqual(sample(0.67, False), ["dit"])
 
         sample(1.00, True)
         sample(1.04, True)
@@ -561,13 +561,13 @@ class WizardStaffTests(unittest.TestCase):
         sample(1.28, True)
         sample(1.35, False)
         sample(1.39, False)
-        self.assertEqual(sample(1.78, False), ["double_quick"])
+        self.assertEqual(sample(1.78, False), ["dit_dit"])
 
         sample(2.00, True)
         sample(2.04, True)
         sample(2.40, False)
         self.assertEqual(sample(2.44, False), [])
-        self.assertEqual(sample(2.83, False), ["medium"])
+        self.assertEqual(sample(2.83, False), ["dah"])
 
         sample(3.00, True)
         sample(3.04, True)
@@ -585,12 +585,12 @@ class WizardStaffTests(unittest.TestCase):
         button.update(True, 0.29)
         button.update(False, 0.65)
         self.assertEqual(button.update(False, 0.69), [])
-        self.assertEqual(button.update(False, 1.08), ["quick_medium"])
+        self.assertEqual(button.update(False, 1.08), ["dit_dah"])
 
         staff = WizardStaff(StaffConfig(orb_leds=2, stem_leds=12,
                                         leds_per_repeat=4))
         staff.step(0.0)
-        staff.trigger("quick_medium", 1.0)
+        staff.trigger("dit_dah", 1.0)
         frame = staff.step(1.1)
         self.assertEqual(frame[:2], [(0, 0, 0)] * 2)
         self.assertEqual(staff.effect, "opposed_pairs")
@@ -626,9 +626,9 @@ class WizardStaffTests(unittest.TestCase):
         self.assertTrue(finished)
 
     def test_hold_extends_b_c_and_e_then_clears(self):
-        for slot, effect in (("double_quick", "upward_spirals"),
-                             ("medium", "channel_wave"),
-                             ("quick_medium", "opposed_pairs")):
+        for slot, effect in (("dit_dit", "upward_spirals"),
+                             ("dah", "channel_wave"),
+                             ("dit_dah", "opposed_pairs")):
             with self.subTest(effect=effect):
                 staff = WizardStaff(StaffConfig())
                 staff.step(0.0)
@@ -663,7 +663,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertTrue(manual_vectors("descent_fill", 4.0, geometry,
                                        continuation=True)[1])
 
-    def test_quick_then_hold_is_distinct_from_plain_hold(self):
+    def test_dit_then_hold_is_distinct_from_plain_hold(self):
         button = ButtonInterpreter(StaffConfig())
         button.update(True, 0.00)
         button.update(True, 0.04)
@@ -671,9 +671,9 @@ class WizardStaffTests(unittest.TestCase):
         button.update(False, 0.14)
         button.update(True, 0.25)
         button.update(True, 0.29)
-        self.assertEqual(button.update(True, 1.15), ["quick_hold_start"])
+        self.assertEqual(button.update(True, 1.15), ["dit_hold_start"])
         button.update(False, 1.20)
-        self.assertEqual(button.update(False, 1.24), ["quick_hold_release"])
+        self.assertEqual(button.update(False, 1.24), ["dit_hold_release"])
 
         late = ButtonInterpreter(StaffConfig())
         late.update(True, 0.00)
@@ -681,10 +681,10 @@ class WizardStaffTests(unittest.TestCase):
         late.update(False, 0.10)
         late.update(False, 0.14)
         late.update(True, 0.55)
-        self.assertEqual(late.update(True, 0.59), ["quick"])
+        self.assertEqual(late.update(True, 0.59), ["dit"])
         self.assertEqual(late.update(True, 1.45), ["hold_start"])
 
-    def test_quick_hold_drops_stack_and_unload(self):
+    def test_dit_hold_drops_stack_and_unload(self):
         geometry = StaffGeometry.from_config(StaffConfig())
         effect = StackingDropEffect(geometry, rng=random.Random(1))
         vectors, finished = effect.vectors(0.1)
@@ -758,7 +758,7 @@ class WizardStaffTests(unittest.TestCase):
         self.assertTrue(any(index > 0 for index in effect.unload_index))
         self.assertTrue(effect.vectors(2.0)[1])
 
-    def test_quick_hold_controller_returns_to_base(self):
+    def test_dit_hold_controller_returns_to_base(self):
         staff = WizardStaff(StaffConfig())
         for now, pressed in ((0.00, True), (0.04, True),
                              (0.10, False), (0.14, False),
@@ -778,7 +778,7 @@ class WizardStaffTests(unittest.TestCase):
         staff = WizardStaff(config)
         player = VirtualButtonPlayer(config, "input")
         staff.step(0.0)
-        staff.trigger("short_short_short", 0.1)
+        staff.trigger("dit_dit_dit", 0.1)
         player.enqueue("s")
         player.enqueue("s")
         started = []
@@ -809,7 +809,7 @@ class WizardStaffTests(unittest.TestCase):
         staff = WizardStaff(StaffConfig(orb_leds=2, stem_leds=16,
                                         leds_per_repeat=4))
         staff.step(0.0)
-        staff.trigger("quick", 1.0)
+        staff.trigger("dit", 1.0)
         self.assertEqual(staff.effect, "descent_fill")
         self.assertEqual(staff.step(1.3)[:2], [(0, 0, 0)] * 2)
         staff.step(5.1)
@@ -923,7 +923,7 @@ class WizardStaffTests(unittest.TestCase):
         staff.step(0.0)
         player.tick(0.0, False)
         base_block, _ = format_status(staff, player, 0.0)
-        staff.trigger("quick", 1.0)
+        staff.trigger("dit", 1.0)
         effect_block, _ = format_status(staff, player, 1.0)
         for block in (base_block, effect_block):
             lines = block.splitlines()
@@ -964,7 +964,7 @@ class WizardStaffTests(unittest.TestCase):
         config = StaffConfig()
         staff = WizardStaff(config)
         staff.step(0.0)
-        staff.trigger("quick", 0.0)
+        staff.trigger("dit", 0.0)
         player = VirtualButtonPlayer(config, "cycle")
         terminal = Terminal()
         display = CycleStatusDisplay(terminal)
@@ -980,9 +980,9 @@ class WizardStaffTests(unittest.TestCase):
         config = StaffConfig()
         staff = WizardStaff(config)
         staff.step(0.0)
-        staff.trigger("quick_hold_start", 1.0)
+        staff.trigger("dit_hold_start", 1.0)
         staff.step(3.0)
-        staff.trigger("quick_hold_release", 3.0)
+        staff.trigger("dit_hold_release", 3.0)
         player = VirtualButtonPlayer(config, "cycle")
         key, seconds = status_snapshot(staff, player, 3.0)
         self.assertEqual(key, "f")

@@ -4,16 +4,16 @@ from collections import deque
 
 
 VIRTUAL_GESTURES = (
-    ("a", "one quick press"),
-    ("b", "two quick presses"),
-    ("c", "medium press"),
-    ("d", "long hold"),
-    ("e", "quick press, then medium press (opposed pairs)"),
-    ("f", "quick press, then long hold"),
-    ("g", "three quick presses (interactive red shots)"),
-    ("h", "medium press, then quick press (twisting ribbons)"),
-    ("i", "two medium presses (gathering spell)"),
-    ("j", "two quick presses, then medium press (American flag)"),
+    ("a", "dit"),
+    ("b", "dit_dit"),
+    ("c", "dah"),
+    ("d", "hold"),
+    ("e", "dit_dah (opposed pairs)"),
+    ("f", "dit_hold"),
+    ("g", "dit_dit_dit (interactive red shots)"),
+    ("h", "dah_dit (twisting ribbons)"),
+    ("i", "dah_dah (gathering spell)"),
+    ("j", "dit_dit_dah (American flag)"),
     ("s", "interactive red shot"),
     ("x", "simulate a long press to exit interactive shots"),
 )
@@ -56,40 +56,40 @@ class VirtualButtonPlayer:
 
     def _intervals_for(self, key):
         config = self.config
-        quick = config.quick_press_max_s - (
+        dit = config.quick_press_max_s - (
             config.quick_press_max_s - config.debounce_s) / 4
         gap = (config.debounce_s + config.multi_press_s) / 2
-        medium = (config.quick_press_max_s + config.long_press_s) / 2
+        dah = (config.quick_press_max_s + config.long_press_s) / 2
         hold_seconds = HOLD_EFFECT_SECONDS + (1.0 if key == "f" else 0.0)
         hold = config.long_press_s + hold_seconds + config.debounce_s
         # The classifier starts its hold timer only after the press debounce.
         # Keep the raw signal asserted long enough to cross that threshold.
         exit_hold = config.long_press_s + 2 * config.debounce_s + 0.02
         if key == "a":
-            return ((0.0, quick),)
+            return ((0.0, dit),)
         if key == "b":
-            return ((0.0, quick), (quick + gap, 2 * quick + gap))
+            return ((0.0, dit), (dit + gap, 2 * dit + gap))
         if key == "c":
-            return ((0.0, medium),)
+            return ((0.0, dah),)
         if key == "d":
             return ((0.0, hold),)
         if key == "e":
-            return ((0.0, quick), (quick + gap, quick + gap + medium))
+            return ((0.0, dit), (dit + gap, dit + gap + dah))
         if key == "g":
-            return tuple((index * (quick + gap),
-                          index * (quick + gap) + quick) for index in range(3))
+            return tuple((index * (dit + gap),
+                          index * (dit + gap) + dit) for index in range(3))
         if key == "h":
-            return ((0.0, medium), (medium + gap, medium + gap + quick))
+            return ((0.0, dah), (dah + gap, dah + gap + dit))
         if key == "i":
-            return ((0.0, medium), (medium + gap, 2 * medium + gap))
+            return ((0.0, dah), (dah + gap, 2 * dah + gap))
         if key == "j":
-            return ((0.0, quick), (quick + gap, 2 * quick + gap),
-                    (2 * (quick + gap), 2 * (quick + gap) + medium))
+            return ((0.0, dit), (dit + gap, 2 * dit + gap),
+                    (2 * (dit + gap), 2 * (dit + gap) + dah))
         if key == "s":
-            return ((0.0, quick),)
+            return ((0.0, dit),)
         if key == "x":
             return ((0.0, exit_hold),)
-        return ((0.0, quick), (quick + gap, quick + gap + hold))
+        return ((0.0, dit), (dit + gap, dit + gap + hold))
 
     def _start(self, key, now):
         self.current_key = key
@@ -164,10 +164,10 @@ class VirtualButtonPlayer:
         if (self.mode == "cycle" and interactive and
                 self.interactive_cycle_started_at is not None):
             elapsed = now - self.interactive_cycle_started_at
-            quick = self.config.quick_press_max_s - (
+            dit = self.config.quick_press_max_s - (
                 self.config.quick_press_max_s - self.config.debounce_s) / 4
-            intervals = ((0.25, 0.25 + quick), (1.15, 1.15 + quick),
-                         (2.5, 2.5 + quick), (3.9, 3.9 +
+            intervals = ((0.25, 0.25 + dit), (1.15, 1.15 + dit),
+                         (2.5, 2.5 + dit), (3.9, 3.9 +
                           self.config.long_press_s + 2 * self.config.debounce_s +
                           0.02))
             if elapsed >= intervals[-1][1]:

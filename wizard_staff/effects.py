@@ -31,11 +31,12 @@ STACK_FADE_SECONDS = 0.5
 OPPOSED_PAIR_WRAPS = 30
 OPPOSED_PAIR_INTERVAL_SECONDS = 0.5
 OPPOSED_PAIR_LAUNCH_SECONDS = 3.0
-DESCENT_FALL_SECONDS = 1.0
-DESCENT_FILL_SECONDS = 1.5
+DESCENT_SPEED_MULTIPLIER = 1.5
+DESCENT_FALL_SECONDS = 1.0 / DESCENT_SPEED_MULTIPLIER
+DESCENT_FILL_SECONDS = 1.5 / DESCENT_SPEED_MULTIPLIER
 DESCENT_HOLD_SECONDS = 1.0
-DESCENT_TOTAL_SECONDS = (DESCENT_FALL_SECONDS + DESCENT_FILL_SECONDS +
-                        DESCENT_HOLD_SECONDS)
+DESCENT_CYAN_BANDS = 10
+DESCENT_ORB_FADE_SECONDS = 0.6
 CHANNEL_WAVE_TOTAL_SECONDS = 3.0
 UPWARD_FLASH_ATTACK_SECONDS = 0.015
 UPWARD_FLASH_FADE_SECONDS = 0.6
@@ -363,7 +364,7 @@ def descent_fill_timing(geometry, options=None):
     stem_length = len(geometry.stem)
     acceleration = downward_acceleration(
         options.get("downward_acceleration", "off"),
-        geometry.leds_per_repeat / geometry.turns_per_repeat)
+        geometry.leds_per_repeat / geometry.turns_per_repeat) * DESCENT_SPEED_MULTIPLIER ** 2
     if not acceleration:
         return DESCENT_FALL_SECONDS, DESCENT_FILL_SECONDS
     fall_speed = (stem_length + 2) / DESCENT_FALL_SECONDS
@@ -385,7 +386,72 @@ def descent_fill_timing(geometry, options=None):
 
 def descent_fill_duration(geometry, options=None):
     fall_time, fill_time = descent_fill_timing(geometry, options)
-    return fall_time + fill_time + DESCENT_HOLD_SECONDS
+    return (fall_time + fill_time + DESCENT_HOLD_SECONDS +
+            descent_finale_timing(geometry).duration)
+
+
+@dataclass(frozen=True)
+class DescentFinaleTiming:
+    fall: float
+    rise_speed: float
+    train_length: int
+    first_arrival: float
+    last_clear: float
+    duration: float
+
+
+def descent_finale_timing(geometry):
+    """Finale times relative to the six-boundary descent's launch."""
+    speed = len(geometry.stem) / DESCENT_FILL_SECONDS
+    # Ten two-row cyan bands, with two dark rows between adjacent bands.
+    train_length = (4 * DESCENT_CYAN_BANDS - 2) * geometry.leds_per_repeat
+    first = DESCENT_FALL_SECONDS + len(geometry.stem) / speed
+    last = first + train_length / speed
+    return DescentFinaleTiming(DESCENT_FALL_SECONDS, speed, train_length,
+                               first, last, last + DESCENT_ORB_FADE_SECONDS)
+
+
+def descent_finale_vectors(elapsed, geometry, max_brightness):
+    """Partition the stem so dark bands overwrite instead of adding to red."""
+    timing = descent_finale_timing(geometry)
+    if elapsed >= timing.duration:
+        return [], True
+    count = len(geometry.stem)
+    # Fastest first, with constant speeds in the ratio 6:5:4:3:2:1.
+    heads = [-1 + count * elapsed / timing.fall * rank / 6
+             for rank in range(6, 0, -1)]
+    white = {math.floor(head) for head in heads if 0 <= head < count}
+    front = count - timing.rise_speed * max(0.0, elapsed - timing.fall)
+    colors = ((0, 255, 255), (0, 0, 0), (255, 0, 0),
+              (0, 0, 0), (0, 255, 255))
+    samples = {(255, 0, 0): [], (0, 255, 255): [], (255, 255, 255): []}
+    for index in range(count):
+        if elapsed >= timing.fall and index >= front:
+            distance = index - front
+            row = math.floor(distance / geometry.leds_per_repeat)
+            color = ((0, 255, 255) if distance < timing.train_length and row % 4 < 2
+                     else (0, 0, 0))
+        elif index in white:
+            color = (255, 255, 255)
+        elif index > heads[0]:
+            color = (255, 0, 0)  # Unreached red ahead of the fastest boundary.
+        else:
+            color = (0, 0, 0)
+            for band in range(5):
+                if heads[band + 1] < index <= heads[band]:
+                    color = colors[band]
+                    break
+        if color in samples:
+            samples[color].append((index, color))
+    vectors = [LightVector(geometry.stem, tuple(points),
+                           brightness=0.4 if color == (255, 0, 0) else 1.0)
+               for color, points in samples.items() if points]
+    if elapsed >= timing.first_arrival:
+        level = max(0.0, 1 - max(0.0, elapsed - timing.last_clear) /
+                    DESCENT_ORB_FADE_SECONDS)
+        vectors.append(solid(geometry.orb, (0, 255, 255), level,
+                             brightness_override=max_brightness))
+    return vectors, False
 
 
 def release_burst_duration(geometry, options=None):
@@ -542,6 +608,8 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
     if name == "bounce_vectors":
         stem = geometry.stem
         length = min(2 * geometry.leds_per_repeat, max(1, len(stem) // 2))
+        white_length = max(1, length - round(geometry.leds_per_repeat /
+                                            geometry.turns_per_repeat))
         bottom = max(0, len(stem) - 2 * length)
         accel_level = options.get("downward_acceleration", "off")
         acceleration = downward_acceleration(
@@ -613,9 +681,9 @@ def base_vectors(name, t, geometry, max_brightness=0.5, options=None):
                 progress = vector_position / bottom
                 scale = fall_scale * max(0.0, progress) ** 0.65
             vectors.append(LightVector(
-                stem, tuple((offset, (255, 255, 255)) for offset in range(length)),
+                stem, tuple((offset, (255, 255, 255)) for offset in range(white_length)),
                 vector_position, brightness=fade,
-                brightness_override=scale))
+                brightness_override=scale * 0.5))
         return vectors
 
     if name == "spring_streams":
@@ -724,12 +792,15 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
     options = options or {}
     stem = geometry.stem
     if name in SPELL_NAMES:
-        return spell_vectors(name, elapsed, geometry, max_brightness, options)
+        return spell_vectors(name, elapsed, geometry, max_brightness, options,
+                             continuation=continuation, stop_at=stop_at)
     if name == "descent_fill":
+        if elapsed >= descent_fill_duration(geometry, options):
+            return [], True
         fall_s, fill_s = descent_fill_timing(geometry, options)
         acceleration = downward_acceleration(
             options.get("downward_acceleration", "off"),
-            geometry.leds_per_repeat / geometry.turns_per_repeat)
+            geometry.leds_per_repeat / geometry.turns_per_repeat) * DESCENT_SPEED_MULTIPLIER ** 2
         allow_reversal = options.get("allow_reversal", True)
         if elapsed < fall_s:
             head = (-1 + elapsed / fall_s * (len(stem) + 2)
@@ -768,7 +839,9 @@ def manual_vectors(name, elapsed, geometry, charge_time=0.0,
             return [solid(stem, (255, 0, 0), 0.4),
                     solid(geometry.orb, color, 0.85,
                           brightness_override=max_brightness)], False
-        return [], True
+        return descent_finale_vectors(
+            elapsed - fall_s - fill_s - DESCENT_HOLD_SECONDS,
+            geometry, max_brightness)
 
     if name == "upward_spirals":
         group_interval, rise_speed, group_lifetime = upward_spiral_timing(

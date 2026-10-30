@@ -184,11 +184,9 @@ class HandoffAndInputTests(unittest.TestCase):
         return staff.step(now, pressed)
 
     def test_effect_fades_all_channels_for_half_second_then_returns_to_base(self):
-        from wizard_staff.effects import descent_fill_duration
-        from wizard_staff.patterns import PATTERN_OPTIONS
         staff = WizardStaff(StaffConfig())
-        staff.trigger("dit", 0)
-        end = descent_fill_duration(staff.geometry, PATTERN_OPTIONS["dit"])
+        staff.trigger("dah", 0)
+        end = 3.0
         previous = staff.step(end - 0.01)
         first = staff.step(end + 0.01)
         self.assertEqual(first, previous)
@@ -217,7 +215,7 @@ class HandoffAndInputTests(unittest.TestCase):
         for frame in range(103, 130):
             self.input_step(staff, player, frame / 60)
         self.assertIsNone(staff.effect)
-        for frame in range(130, 150):
+        for frame in range(130, 200):
             self.input_step(staff, player, frame / 60)
         self.assertEqual(staff.effect, "descent_fill")
 

@@ -81,6 +81,18 @@ class WizardStaff:
         return frame
 
     def trigger(self, slot, now):
+        if PATTERN_OPTIONS.get(slot, {}).get("action") == "next_base":
+            if self.selected_base is not None:
+                index = BASE_PATTERNS.index(self.selected_base)
+            else:
+                elapsed = 0.0 if self.started_at is None else now - self.started_at
+                index = int(elapsed // self.config.base_pattern_s) % len(BASE_PATTERNS)
+            # Keep an in-progress second press intact if it closes the window
+            # that resolves this single dit.
+            self.cancel_effect()
+            self.selected_base = BASE_PATTERNS[(index + 1) % len(BASE_PATTERNS)]
+            self.selected_base_started_at = now
+            return
         if (slot == "interactive_shot" and self.effect == "interactive_red_shots"
                 and self.fade_started_at is None):
             self.interactive_shots.shoot(now - self.effect_started_at)

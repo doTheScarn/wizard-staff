@@ -13,8 +13,7 @@ BASE_PATTERN_OPTIONS = {
 
 
 PATTERN_OPTIONS = {
-    "dit": {"sequence": ("dit",), "effect": "descent_fill",
-              "downward_acceleration": "low"},
+    "dit": {"sequence": ("dit",), "action": "next_base"},
     "dah": {"sequence": ("dah",), "effect": "channel_wave",
                "extend_on_hold": True},
     "dit_dit": {"sequence": ("dit", "dit"),
@@ -28,8 +27,9 @@ PATTERN_OPTIONS = {
     "dit_dit_dit": {"sequence": ("dit", "dit", "dit"),
                           "effect": "interactive_red_shots", "interactive": True},
     "dit_dit_dah": {"sequence": ("dit", "dit", "dah"),
-                           "effect": "american_flag"},
-    "dit_dah_dit": {"sequence": ("dit", "dah", "dit"), "effect": None},
+                           "effect": "american_flag", "extend_on_hold": True},
+    "dit_dah_dit": {"sequence": ("dit", "dah", "dit"),
+                        "effect": "descent_fill", "downward_acceleration": "low"},
     "dit_dah_dah": {"sequence": ("dit", "dah", "dah"), "effect": None},
     "dah_dit_dit": {"sequence": ("dah", "dit", "dit"), "effect": None},
     "dah_dit_dah": {"sequence": ("dah", "dit", "dah"), "effect": None},

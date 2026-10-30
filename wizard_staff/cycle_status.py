@@ -3,7 +3,6 @@
 from .controller import EFFECT_FADE_SECONDS
 from .effects import (
     CHANNEL_WAVE_TOTAL_SECONDS,
-    DESCENT_TOTAL_SECONDS,
     RELEASE_BURST_SECONDS, RELEASE_DELAY_SECONDS,
     UNSET_INDICATOR_SECONDS,
     descent_fill_duration,
@@ -37,7 +36,6 @@ PATTERN_ROWS = (
 )
 PATTERN_NAMES = {key: name for key, _, name in PATTERN_ROWS}
 EFFECT_LENGTHS = {
-    "descent_fill": DESCENT_TOTAL_SECONDS,
     "channel_wave": CHANNEL_WAVE_TOTAL_SECONDS,
     "release_burst": RELEASE_BURST_SECONDS + RELEASE_DELAY_SECONDS,
     "unset": UNSET_INDICATOR_SECONDS,
@@ -70,10 +68,10 @@ def _next_effect_at(player):
     if player.current_key is None:
         return None
     key = player.current_key
-    if key in ("a", "b", "c", "e", "h", "i"):
+    if key in ("b", "c", "e", "h", "i"):
         delay = player.config.debounce_s + player.config.multi_press_s
         return player.started_at + player.intervals[-1][1] + delay
-    if key in ("g", "j"):
+    if key in ("a", "g", "j"):
         return player.started_at + player.intervals[-1][1] + player.config.debounce_s
     start = player.intervals[-1][0]
     return player.started_at + start + player.config.debounce_s + player.config.long_press_s
@@ -102,6 +100,8 @@ def status_snapshot(staff, player, now):
                          spell_duration(effect, staff.geometry, staff.effect_options) - now)
         elif effect == "interactive_red_shots":
             remaining = None
+        elif effect == "american_flag" and staff.extension_stop_at is not None:
+            remaining = (staff.effect_started_at + staff.extension_stop_at + 0.5 - now)
         elif effect == "descent_fill":
             remaining = (staff.effect_started_at +
                          descent_fill_duration(staff.geometry,
@@ -112,6 +112,10 @@ def status_snapshot(staff, player, now):
                                                 staff.effect_options) - now)
         else:
             remaining = staff.effect_started_at + EFFECT_LENGTHS[effect] - now
+        if (effect in ("upward_spirals", "channel_wave", "opposed_pairs", "american_flag")
+                and staff.extension_stop_at is None and
+                (staff.extension_candidate is not None or staff.extension_held)):
+            remaining = None
         if staff.fade_started_at is not None:
             remaining = staff.fade_started_at + EFFECT_FADE_SECONDS - now
         elif remaining is not None and effect not in ("charge", "stack_drop"):
@@ -138,7 +142,9 @@ def format_status(staff, player, now, report_text=None):
     lines = [f"Active pattern: {PATTERN_NAMES[key]}", "", "Cycle sequence:"]
     for row_key, entry in entries:
         if row_key == key:
-            countdown = ("interactive: tap shoots, hold exits" if seconds is None
+            countdown = (("interactive: tap shoots, hold exits"
+                          if staff.effect == "interactive_red_shots"
+                          else "holding: release to finish") if seconds is None
                          else f"{seconds:>2}s left")
             lines.append(f"> {entry:<{width}}  {countdown}")
         else:

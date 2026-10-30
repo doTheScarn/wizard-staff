@@ -147,17 +147,19 @@ def gathering_spell(elapsed, geometry, max_brightness, options=None):
     return vectors, False
 
 
-def american_flag(elapsed, geometry, max_brightness):
+def american_flag(elapsed, geometry, max_brightness, continuation=False, stop_at=None):
     """Three fixed color bands with traveling, gently decaying wind ripples."""
-    duration = SPELL_DURATIONS["american_flag"]
-    if elapsed >= duration:
+    duration = (stop_at + 0.5 if stop_at is not None else
+                None if continuation else SPELL_DURATIONS["american_flag"])
+    if duration is not None and elapsed >= duration:
         return [], True
     colors = ((255, 0, 0), (255, 255, 255), (0, 0, 255))
     # Each gust softens over time, then a fresh gust rolls through the fabric.
     gust_age = elapsed % 2.8
     gust = (_smooth(gust_age / 0.2) * math.exp(-gust_age / 0.9) *
             (1 - _smooth((gust_age - 2.4) / 0.4)))
-    fade = 1 - _smooth((elapsed - (duration - 0.5)) / 0.5)
+    fade = (1.0 if duration is None else
+            1 - _smooth((elapsed - (duration - 0.5)) / 0.5))
     samples = []
     count = len(geometry.stem)
     for index in range(count):
@@ -174,9 +176,10 @@ def american_flag(elapsed, geometry, max_brightness):
                         brightness_override=0.6 * max_brightness)], False
 
 
-def spell_vectors(name, elapsed, geometry, max_brightness, options=None):
+def spell_vectors(name, elapsed, geometry, max_brightness, options=None,
+                  continuation=False, stop_at=None):
     if name == "american_flag":
-        return american_flag(elapsed, geometry, max_brightness)
+        return american_flag(elapsed, geometry, max_brightness, continuation, stop_at)
     if name == "twisting_ribbons":
         return twisting_ribbons(elapsed, geometry, max_brightness)
     if name == "gathering_spell":

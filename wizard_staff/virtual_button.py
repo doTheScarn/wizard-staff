@@ -4,7 +4,7 @@ from collections import deque
 
 
 VIRTUAL_GESTURES = (
-    ("a", "dit"),
+    ("a", "dit_dah_dit (descent fill)"),
     ("b", "dit_dit"),
     ("c", "dah"),
     ("d", "hold"),
@@ -66,7 +66,8 @@ class VirtualButtonPlayer:
         # Keep the raw signal asserted long enough to cross that threshold.
         exit_hold = config.long_press_s + 2 * config.debounce_s + 0.02
         if key == "a":
-            return ((0.0, dit),)
+            return ((0.0, dit), (dit + gap, dit + gap + dah),
+                    (dit + dah + 2 * gap, 2 * dit + dah + 2 * gap))
         if key == "b":
             return ((0.0, dit), (dit + gap, 2 * dit + gap))
         if key == "c":

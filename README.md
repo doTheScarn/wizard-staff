@@ -58,7 +58,10 @@ turn is handled automatically.
 
 ## Patterns and button slots
 
-Without virtual-button selection, the base patterns cycle every 18 seconds:
+At startup, the base patterns cycle every 18 seconds. A single short press
+advances from the currently displayed base to the next one, wraps after pattern
+4, and keeps that selection until another manual selection. Effects return to
+that selected base. The four bases are:
 
 1. Near-white, two-wrap tails fall from the top at an initial 48 stem LEDs/s
    with low downward acceleration. The green orb pulses once per launch,
@@ -68,6 +71,8 @@ Without virtual-button selection, the base patterns cycle every 18 seconds:
 3. White vectors reflect above a green anchor with a pronounced impact pulse.
    They launch at 120 stem LEDs/s and low acceleration, 6 wraps/s^2. Falling
    vectors are one third dimmer; rising vectors progressively dim toward the top.
+   Both white vectors now use half their previous output brightness and are
+   one physical wrap shorter (one wrap long with the default geometry).
    Two flights overlap. A returning light remains absent for 200 ms before its
    replacement launches. The brighter orange orb gives a red cue 60 ms before
    each drop.
@@ -85,11 +90,13 @@ The button has software debounce and a 0.38-second multi-press window.
 Gesture names use Morse-style notation: `dit` is a short press (up to
 0.28 seconds), `dah` is a medium press (below 0.85 seconds), and `hold`
 starts at 0.85 seconds. Underscores join presses, such as `dit_dah_dit`.
-The a-j terminal shortcuts are unchanged:
+The a-j terminal effect shortcuts remain available; a now simulates the new
+short-medium-short descent/fill gesture:
 
 | Gesture | Slot | Effect |
 | --- | --- | --- |
-| `dit` | a | Icy blue/violet tail descends, then leads a dim red fill back up with low acceleration; the fill follows the ring position; orb flashes |
+| `dit` | 1-4 select directly | Advance to the next base pattern and keep it selected |
+| `dit_dah_dit` | a | Icy drop and red fill at 1.5 times their former speeds, then six white boundaries with cyan/dark/red/dark/cyan bands descend; ten two-row cyan bands with two dark rows between them overwrite upward; cyan orb fades after the last band clears |
 | `dit_dit` | b | Growing groups of varied, two-wrap upward trails; quiet yellow orb flashes brighter blue on the first light arrival, with a 15 ms rise and 600 ms fade |
 | `dah` | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating one column per second under a subdued white orb |
 | `hold` | d | Slower upward lights and a blue orb while held; release pauses for 200 ms with the orb blue before launching the burst; the orb stays blue until the first burst vector arrives, then bright purple with rapid white flashes |
@@ -98,14 +105,14 @@ The a-j terminal shortcuts are unchanged:
 | `dit_dit_dit` | g | Interactive red shots spanning two solid red wraps: the leading wrap at configured maximum brightness, the trailing wrap at one third; dits shoot and a hold exits |
 | `dah_dit` | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds |
 | `dah_dah` | i | Two tightly spaced triplets accelerate upward at high (14 wraps/s^2); the second starts as the first set of tails clears, without waiting for orb flashes; arrival and duration follow the actual motion |
-| `dit_dit_dah` | j | Red orb and upper stem third, white middle third, blue lower third; strong traveling brightness ripples soften between gusts; 8 seconds |
+| `dit_dit_dah` | j | Red orb and upper stem third, white middle third, blue lower third; strong traveling brightness ripples soften between gusts; 8 seconds, or continue while held |
 
 The button interpreter defines the following dit/dah sequences. Unassigned
 sequences show the brief red unset indicator:
 
 | Sequence | Assignment |
 | --- | --- |
-| `dit` | Descent fill |
+| `dit` | Next base pattern (manual selection) |
 | `dah` | Channel wave |
 | `dit_dit` | Upward spirals |
 | `dit_dah` | Opposed pairs |
@@ -113,7 +120,7 @@ sequences show the brief red unset indicator:
 | `dah_dah` | Gathering spell |
 | `dit_dit_dit` | Interactive red shots |
 | `dit_dit_dah` | American flag |
-| `dit_dah_dit` | Unassigned |
+| `dit_dah_dit` | Descent fill and cyan finale |
 | `dit_dah_dah` | Unassigned |
 | `dah_dit_dit` | Unassigned |
 | `dah_dit_dah` | Unassigned |
@@ -131,9 +138,22 @@ base selection interrupts the handoff; base patterns do not fade automatically.
 Button timings are in `wizard_staff/config.py`; slot assignments and optional
 pattern flags are in `wizard_staff/patterns.py`. New spell choreography and
 shared ember/mist/red palettes are in `wizard_staff/spell_effects.py`.
-Patterns b, c, and e can be extended by pressing and holding while they run.
-Releasing stops new launches and lets active vectors clear. Pattern e normally
-launches for three seconds.
+Patterns b (`dit_dit`), c (`dah`), e (`dit_dah`), and j (`dit_dit_dah`,
+American flag) can be extended by pressing and holding while they run.
+Releasing stops new launches and lets active vectors clear; the flag fades over
+half a second from release. Pattern e normally launches for three seconds.
+
+The descent/fill finale starts after the red fill and orb flashes. Six white
+lights descend from the top at constant speeds in the ratio 6:5:4:3:2:1.
+From the fastest to the slowest boundary, the spaces are cyan, dark, red, dark,
+cyan. The leading boundary replaces the old red as it travels down. As soon as
+it reaches the bottom, a finite train rises from the bottom, overwriting the
+still-descending bands: ten cyan bands, each two vertical rows wide, separated
+by two dark rows. A row spans `leds_per_repeat` stem LEDs, including with two
+physical turns per repeat. Behind the final band the stem stays dark. The orb
+turns cyan on the first band arrival, stays cyan until the tenth clears the top,
+then fades to black over 0.6 seconds. Timings and band count are in
+`wizard_staff/effects.py`.
 One- and two-press dit/dah patterns are recognized after the multi-press
 window closes; three-press patterns are recognized on the third release. A hold
 starts its effect as soon as the long-press threshold is crossed. In interactive
@@ -160,7 +180,7 @@ On a development computer, no Pi packages are needed:
 
 ```bash
 python main.py --dry-run --seconds 10
-python main.py --dry-run --seconds 5 --effect dit
+python main.py --dry-run --seconds 10 --effect dit_dah_dit
 python main.py --dry-run --virtual-button cycle
 python main.py --dry-run --virtual-button input
 python main.py --dry-run --effect gathering_spell --seconds 5

@@ -42,7 +42,7 @@ class WizardStaff:
         self.last_effect_frame = None
 
     def select_base_pattern(self, number, now):
-        """Select one base pattern until another selection replaces it."""
+        """Hold one base until another selection or a return from an effect."""
         if not 1 <= number <= len(BASE_PATTERNS):
             raise ValueError("base pattern number out of range")
         self.cancel_effect(reset_button=True)
@@ -50,7 +50,10 @@ class WizardStaff:
         self.selected_base_started_at = now
 
     def cancel_effect(self, reset_button=False):
-        """Immediately interrupt an effect for an explicit new selection."""
+        """Clear an effect and resume the automatic base schedule."""
+        if self.effect is not None:
+            self.selected_base = None
+            self.selected_base_started_at = None
         self.effect = None
         self.effect_started_at = None
         self.stack_effect = None

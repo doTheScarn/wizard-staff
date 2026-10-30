@@ -1,6 +1,7 @@
 """Button routing and spatial/timing checks for the expanded descent effect."""
 
 import unittest
+from unittest.mock import patch
 
 from wizard_staff.config import StaffConfig
 from wizard_staff.controller import WizardStaff
@@ -77,7 +78,7 @@ class ButtonAndFinaleTests(unittest.TestCase):
                 staff.step(12)
                 staff.step(12.51)
                 self.assertIsNone(staff.effect)
-                self.assertEqual(staff.selected_base, BASE_PATTERNS[3])
+                self.assertIsNone(staff.selected_base)
 
     def test_fall_and_fill_follow_old_trajectories_in_two_thirds_the_time(self):
         geometry = StaffGeometry.from_config(StaffConfig())
@@ -178,7 +179,7 @@ class ButtonAndFinaleTests(unittest.TestCase):
                 self.assertTrue(done)
                 self.assertFalse(any(any(rgb) for rgb in black))
 
-    def test_full_effect_duration_includes_finale_and_returns_to_selected_base(self):
+    def test_full_effect_duration_includes_finale_and_returns_to_base_cycle(self):
         staff = WizardStaff()
         staff.select_base_pattern(2, 0)
         staff.trigger("dit_dah_dit", 0)
@@ -195,7 +196,51 @@ class ButtonAndFinaleTests(unittest.TestCase):
         for frame_number in range(int(orb_time * 60) + 1, round(duration * 60) + 40):
             staff.step(frame_number / 60)
         self.assertIsNone(staff.effect)
-        self.assertEqual(staff.selected_base, BASE_PATTERNS[1])
+        self.assertIsNone(staff.selected_base)
+
+    def test_startup_cycles_manual_dit_holds_and_effect_return_resumes_schedule(self):
+        staff = WizardStaff(StaffConfig(base_pattern_s=2))
+        with patch("wizard_staff.controller.base_vectors", return_value=[]) as base:
+            staff.step(0)
+            self.assertEqual(base.call_args.args[0], BASE_PATTERNS[0])
+            staff.step(2.1)
+            self.assertEqual(base.call_args.args[0], BASE_PATTERNS[1])
+            staff.trigger("dit", 2.2)
+            staff.step(20)
+            self.assertEqual(base.call_args.args[0], BASE_PATTERNS[2])
+            staff.trigger("dah", 20.1)
+            staff.step(21)
+            staff.step(23.2)
+            self.assertIsNotNone(staff.fade_started_at)
+            staff.step(23.71)
+            self.assertIsNone(staff.effect)
+            self.assertIsNone(staff.selected_base)
+            self.assertIsNone(staff.selected_base_started_at)
+            staff.step(23.8)
+            self.assertEqual(base.call_args.args[0], BASE_PATTERNS[3])
+            self.assertAlmostEqual(base.call_args.args[1], 1.8)
+            staff.step(25.8)
+            self.assertEqual(base.call_args.args[0], BASE_PATTERNS[0])
+            staff.trigger("dit", 25.9)
+            staff.step(100)
+            self.assertEqual(base.call_args.args[0], BASE_PATTERNS[1])
+
+    def test_interactive_exit_and_explicit_cancellation_clear_manual_hold(self):
+        for interactive in (False, True):
+            with self.subTest(interactive=interactive):
+                staff = WizardStaff()
+                staff.step(0)
+                staff.select_base_pattern(3, 0)
+                staff.trigger("dit_dit_dit" if interactive else "dah", 0.1)
+                if interactive:
+                    staff.trigger("interactive_exit", 0.2)
+                    staff.step(0.2)
+                else:
+                    staff.cancel_effect(reset_button=True)
+                self.assertIsNone(staff.effect)
+                self.assertIsNone(staff.selected_base)
+                staff.trigger("dit", 1)
+                self.assertEqual(staff.selected_base, BASE_PATTERNS[1])
 
 
 if __name__ == "__main__":

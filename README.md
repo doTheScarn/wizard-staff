@@ -60,8 +60,9 @@ turn is handled automatically.
 
 At startup, the base patterns cycle every 18 seconds. A single short press
 advances from the currently displayed base to the next one, wraps after pattern
-4, and keeps that selection until another manual selection. Effects return to
-that selected base. The four bases are:
+4, and holds that selection until another manual selection or a return from a
+triggered effect. Every effect return clears the manual hold and resumes the
+normal 18-second rotation on the original schedule. The four bases are:
 
 1. Near-white, two-wrap tails fall from the top at an initial 48 stem LEDs/s
    with low downward acceleration. The green orb pulses once per launch,
@@ -95,7 +96,7 @@ short-medium-short descent/fill gesture:
 
 | Gesture | Slot | Effect |
 | --- | --- | --- |
-| `dit` | 1-4 select directly | Advance to the next base pattern and keep it selected |
+| `dit` | 1-4 select directly | Advance to the next base pattern and hold it until another selection or an effect returns |
 | `dit_dah_dit` | a | Icy drop and red fill at 1.5 times their former speeds, then six white boundaries with cyan/dark/red/dark/cyan bands descend; ten two-row cyan bands with six dark rows between them overwrite upward; cyan orb fades after the last band clears |
 | `dit_dit` | b | Growing groups of varied, two-wrap upward trails; quiet yellow orb flashes brighter blue on the first light arrival, with a 15 ms rise and 600 ms fade |
 | `dah` | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating one column per second under a subdued white orb |
@@ -167,7 +168,7 @@ wrap uses one third of that output, independent of gamma. Shots travel 30%
 faster than before, reaching the orb after about 0.308 seconds without acceleration;
 the orb flashes red and fades over 0.2 seconds. Shots can overlap. Hold the
 button for the normal 0.85-second threshold to exit; the staff immediately
-returns to its selected or scheduled base pattern.
+returns to the automatic base-pattern rotation.
 The `dit_hold` slot drops eight bars per second (two per second in each of
 the default four channels) at 100 vertical pixels per second. Each channel
 stacks up to ten bars, or 40 vertical pixels. Extra drops disappear when they
@@ -203,8 +204,8 @@ immediately. Gesture commands still pass through the normal press durations,
 debounce, and multi-press window. Base patterns, including 4, do not wait for
 vectors to clear. `s` and `x` retain their interactive shot/exit behavior.
 Hold gestures stay active for about five seconds before release; f holds for
-six seconds to demonstrate drops continuing after the stacks fill. A selected
-base pattern resumes after a triggered effect.
+six seconds to demonstrate drops continuing after the stacks fill. After a
+triggered effect, the automatic base-pattern rotation resumes.
 In `cycle` mode, the route includes `g` for interactive red shots after the
 existing `a` through `f` gestures and their base-pattern gaps. It demonstrates
 three shots at irregular intervals, then holds to exit and continues through

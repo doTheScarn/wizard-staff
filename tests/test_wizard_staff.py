@@ -926,7 +926,7 @@ class WizardStaffTests(unittest.TestCase):
             staff.step(now, pressed)
         self.assertEqual(starts, ["a", "d"])
         self.assertEqual(base_selections, [2])
-        self.assertEqual(staff.selected_base, "green_channels")
+        self.assertIsNone(staff.selected_base)
         self.assertIsNone(player.current_key)
         self.assertFalse(player.tick(16.0, staff.effect is not None))
 

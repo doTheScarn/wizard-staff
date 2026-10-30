@@ -1,0 +1,17 @@
+[Unit]
+Description=Wizard Staff LED controller
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/wizard-staff
+ExecStart=/home/pi/miniforge3/envs/tire/bin/python -u /home/pi/wizard-staff/main.py
+Restart=on-failure
+RestartSec=3
+Nice=-5
+CPUWeight=200
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -84,13 +84,36 @@ class TimingAndSpringTests(unittest.TestCase):
         effect.vectors(7.0)
         self.assertEqual(sum(map(len, effect.stacks)), 40)
 
-    def test_g_strong_head_and_dim_tail(self):
-        staff = WizardStaff(self.config)
-        staff.trigger("dit_dit_dit", 0)
-        staff.trigger("interactive_shot", 0)
-        vector = staff.interactive_shots.vectors(0.1)[0]
-        self.assertGreater(vector.samples[0][1][0], 3 * vector.samples[2][1][0])
-        self.assertGreater(vector.samples[1][1][0], 3 * vector.samples[2][1][0])
+    def test_red_shots_two_wraps_linear_brightness_and_faster_travel(self):
+        cases = ((4, 1, [1] * 4 + [1 / 3] * 4),
+                 (4, 2, [1] * 2 + [1 / 3] * 2),
+                 (5, 2, [1, 1, 2 / 3, 1 / 3, 1 / 3]),
+                 (1, 2, [2 / 3]))
+        for repeat, turns, levels in cases:
+            for gamma in (1.0, 2.2):
+                with self.subTest(repeat=repeat, turns=turns, gamma=gamma):
+                    config = StaffConfig(orb_leds=2, stem_leds=80,
+                                         leds_per_repeat=repeat, turns_per_repeat=turns,
+                                         max_brightness=0.6, gamma=gamma)
+                    staff = WizardStaff(config)
+                    staff.trigger("dit_dit_dit", 0)
+                    staff.trigger("interactive_shot", 0)
+                    shots = staff.interactive_shots
+                    self.assertAlmostEqual(shots.speed, (80 + 1) / 0.4 * 1.3)
+                    self.assertAlmostEqual(shots.arrival, 0.4 / 1.3)
+                    # Place the leading edge exactly on a stem LED, away from the ends.
+                    now = (80 - 1 - 20) / shots.speed
+                    vectors = shots.vectors(now)
+                    frame = render(vectors, staff.geometry.total_leds, gamma=gamma)
+                    expected = [(0, 0, 0)] * staff.geometry.total_leds
+                    for i, level in enumerate(levels):
+                        expected[2 + 20 + i] = (round(255 * 0.6 * level), 0, 0)
+                    self.assertEqual(frame, expected)
+                    shots.shoot(0)
+                    overlap = render(shots.vectors(now), staff.geometry.total_leds,
+                                     gamma=gamma)
+                    self.assertEqual(overlap, [tuple(min(255, 2 * c) for c in rgb)
+                                               for rgb in expected])
 
     def test_gathering_clearance_and_arrival_at_different_geometries(self):
         for size in (1, 9, 269):

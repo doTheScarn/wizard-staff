@@ -3,6 +3,7 @@ import random
 import sys
 import io
 import re
+from itertools import product
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -21,6 +22,7 @@ from wizard_staff.effects import (BASE_PATTERNS, BOUNCE_LEDS_PER_SECOND,
 from wizard_staff.geometry import StaffGeometry
 from wizard_staff.hardware import PiHardware, encode_color
 from wizard_staff.motion import downward_acceleration, time_to_position
+from wizard_staff.patterns import PATTERN_OPTIONS
 from wizard_staff.vectors import LightVector, palette_trail, solid, render
 from wizard_staff.spell_effects import (EMBER_PALETTE, gathering_timing,
                                        spell_duration, SPELL_DURATIONS)
@@ -598,6 +600,27 @@ class WizardStaffTests(unittest.TestCase):
         staff.step(12.0)
         staff.step(12.51)
         self.assertIsNone(staff.effect)
+
+    def test_all_dit_dah_sequences_use_morse_names(self):
+        names = {"hold", "dit_hold"}
+        for length in (1, 2, 3):
+            for sequence in product(("dit", "dah"), repeat=length):
+                name = "_".join(sequence)
+                names.add(name)
+                with self.subTest(sequence=sequence):
+                    button = ButtonInterpreter(StaffConfig())
+                    events = []
+                    now = 0.0
+                    for token in sequence:
+                        duration = 0.1 if token == "dit" else 0.45
+                        for pressed, at in ((True, now), (True, now + 0.04),
+                                            (False, now + duration),
+                                            (False, now + duration + 0.04)):
+                            events.extend(button.update(pressed, at))
+                        now += duration + 0.15
+                    events.extend(button.update(False, now + 0.4))
+                    self.assertEqual(events, [name])
+        self.assertEqual(set(PATTERN_OPTIONS), names)
 
     def test_opposed_pairs_launch_and_clear(self):
         geometry = StaffGeometry.from_config(StaffConfig())

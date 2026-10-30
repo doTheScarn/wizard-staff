@@ -81,40 +81,46 @@ Without virtual-button selection, the base patterns cycle every 18 seconds:
 
 Rainbow sparks remain available in code but are out of the cycle.
 
-The button has software debounce and a 0.38-second multi-press window:
+The button has software debounce and a 0.38-second multi-press window.
+Gesture names use Morse-style notation: `dit` is a short press (up to
+0.28 seconds), `dah` is a medium press (below 0.85 seconds), and `hold`
+starts at 0.85 seconds. Underscores join presses, such as `dit_dah_dit`.
+The a-j terminal shortcuts are unchanged:
 
 | Gesture | Slot | Effect |
 | --- | --- | --- |
-| One quick press | a | Icy blue/violet tail descends, then leads a dim red fill back up with low acceleration; the fill follows the ring position; orb flashes |
-| Two quick presses | b | Growing groups of varied, two-wrap upward trails; quiet yellow orb flashes brighter blue on the first light arrival, with a 15 ms rise and 600 ms fade |
-| Medium press | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating one column per second under a subdued white orb |
-| Long press and hold | d | Slower upward lights and a blue orb while held; release pauses for 200 ms with the orb blue before launching the burst; the orb stays blue until the first burst vector arrives, then bright purple with rapid white flashes |
-| Quick press then medium press | e | Original alternating blue and green pairs with linear 30-wrap fading tails launch from the center toward both ends twice per second; orb stays dark |
-| Quick press then long hold | f | Four-pixel bars cycle through all eight familiar saturated colors in shuffled order before repeating, and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
-| Three quick presses | g | Interactive red shots with a prominent two-pixel warm head and a dim red-to-crimson tail; short presses shoot and a long hold exits |
-| Medium then quick press | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds |
-| Two medium presses | i | Two tightly spaced triplets accelerate upward at high (14 wraps/s^2); the second starts as the first set of tails clears, without waiting for orb flashes; arrival and duration follow the actual motion |
-| Two quick presses then medium press | j | Red orb and upper stem third, white middle third, blue lower third; strong traveling brightness ripples soften between gusts; 8 seconds |
+| `dit` | a | Icy blue/violet tail descends, then leads a dim red fill back up with low acceleration; the fill follows the ring position; orb flashes |
+| `dit_dit` | b | Growing groups of varied, two-wrap upward trails; quiet yellow orb flashes brighter blue on the first light arrival, with a 15 ms rise and 600 ms fade |
+| `dah` | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating one column per second under a subdued white orb |
+| `hold` | d | Slower upward lights and a blue orb while held; release pauses for 200 ms with the orb blue before launching the burst; the orb stays blue until the first burst vector arrives, then bright purple with rapid white flashes |
+| `dit_dah` | e | Original alternating blue and green pairs with linear 30-wrap fading tails launch from the center toward both ends twice per second; orb stays dark |
+| `dit_hold` | f | Four-pixel bars cycle through all eight familiar saturated colors in shuffled order before repeating, and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
+| `dit_dit_dit` | g | Interactive red shots spanning two solid red wraps: the leading wrap at configured maximum brightness, the trailing wrap at one third; dits shoot and a hold exits |
+| `dah_dit` | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds |
+| `dah_dah` | i | Two tightly spaced triplets accelerate upward at high (14 wraps/s^2); the second starts as the first set of tails clears, without waiting for orb flashes; arrival and duration follow the actual motion |
+| `dit_dit_dah` | j | Red orb and upper stem third, white middle third, blue lower third; strong traveling brightness ripples soften between gusts; 8 seconds |
 
-The button interpreter defines the following short/medium sequences. Unassigned
+The button interpreter defines the following dit/dah sequences. Unassigned
 sequences show the brief red unset indicator:
 
 | Sequence | Assignment |
 | --- | --- |
-| One short | Descent fill |
-| One medium | Channel wave |
-| Two shorts | Upward spirals |
-| Short, then medium | Opposed pairs |
-| Medium, then short | Twisting ribbons |
-| Two mediums | Gathering spell |
-| Short, short, short | Interactive red shots |
-| Short, short, medium | American flag |
-| Short, medium, short | Unassigned |
-| Short, medium, medium | Unassigned |
-| Medium, short, short | Unassigned |
-| Medium, short, medium | Unassigned |
-| Medium, medium, short | Unassigned |
-| Medium, medium, medium | Unassigned |
+| `dit` | Descent fill |
+| `dah` | Channel wave |
+| `dit_dit` | Upward spirals |
+| `dit_dah` | Opposed pairs |
+| `dah_dit` | Twisting ribbons |
+| `dah_dah` | Gathering spell |
+| `dit_dit_dit` | Interactive red shots |
+| `dit_dit_dah` | American flag |
+| `dit_dah_dit` | Unassigned |
+| `dit_dah_dah` | Unassigned |
+| `dah_dit_dit` | Unassigned |
+| `dah_dit_dah` | Unassigned |
+| `dah_dah_dit` | Unassigned |
+| `dah_dah_dah` | Unassigned |
+| `hold` | Charge / release burst |
+| `dit_hold` | Stacking drops / unload |
 
 All triggered patterns use a half-second fade-to-black handoff before returning
 to a base pattern. The handoff fades the last displayed frame, including the
@@ -128,15 +134,17 @@ shared ember/mist/red palettes are in `wizard_staff/spell_effects.py`.
 Patterns b, c, and e can be extended by pressing and holding while they run.
 Releasing stops new launches and lets active vectors clear. Pattern e normally
 launches for three seconds.
-One- and two-press short/medium patterns are recognized after the multi-press
+One- and two-press dit/dah patterns are recognized after the multi-press
 window closes; three-press patterns are recognized on the third release. A hold
 starts its effect as soon as the long-press threshold is crossed. In interactive
-red-shot mode the staff goes dark; each short press launches a red vector up the
-helix with an eight-wrap fading tail. When it reaches the orb after 0.4 seconds,
+red-shot mode the staff goes dark; each dit launches two solid red wraps up the
+helix. The leading wrap uses configured maximum brightness, and the trailing
+wrap uses one third of that output, independent of gamma. Shots travel 30%
+faster than before, reaching the orb after about 0.308 seconds without acceleration;
 the orb flashes red and fades over 0.2 seconds. Shots can overlap. Hold the
 button for the normal 0.85-second threshold to exit; the staff immediately
 returns to its selected or scheduled base pattern.
-The quick-then-hold slot drops eight bars per second (two per second in each of
+The `dit_hold` slot drops eight bars per second (two per second in each of
 the default four channels) at 100 vertical pixels per second. Each channel
 stacks up to ten bars, or 40 vertical pixels. Extra drops disappear when they
 reach the full stack. On release, in-flight drops clear and the stacks unload
@@ -152,7 +160,7 @@ On a development computer, no Pi packages are needed:
 
 ```bash
 python main.py --dry-run --seconds 10
-python main.py --dry-run --seconds 5 --effect quick
+python main.py --dry-run --seconds 5 --effect dit
 python main.py --dry-run --virtual-button cycle
 python main.py --dry-run --virtual-button input
 python main.py --dry-run --effect gathering_spell --seconds 5
@@ -250,3 +258,77 @@ baseline and flash settings are applied as written.
 
 The American flag pattern is also available directly with `--effect american_flag`.
 Its stem is divided into three nearly equal LED bands; the orb stays red.
+
+## Start automatically on Raspberry Pi boot
+
+Use a systemd service to start without logging in and restart after a crash.
+The definition is tracked in [deploy/wizard-staff.service](deploy/wizard-staff.service).
+It assumes the repository is `/home/pi/wizard-staff` and uses the existing
+`tire` environment's Python. Stop any manually running staff script before
+starting the service.
+
+From the repository directory on the Pi, install the definition:
+
+```bash
+sudo install -m 0644 deploy/wizard-staff.service /etc/systemd/system/wizard-staff.service
+```
+
+If your paths differ, edit the installed file before starting it:
+
+```bash
+sudo nano /etc/systemd/system/wizard-staff.service
+```
+
+Set `WorkingDirectory` to the output of `pwd` from your repository. Update both
+the Python executable and `main.py` paths in `ExecStart` as needed. To log frame
+timing diagnostics, append `--report-fps` to that command.
+
+The service runs as root, matching the existing hardware launch command. It
+uses the environment's Python directly, so Conda activation is unnecessary.
+`SIGINT` lets the script run its normal cleanup and clear the LEDs when stopped.
+The service uses the physical button; omit interactive terminal options.
+`Nice=-5` and `CPUWeight=200` give it higher CPU priority during contention;
+they do not guarantee frame timing or prevent pauses in the LED driver.
+
+Apply the definition, enable boot startup, and start or restart the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable wizard-staff.service
+sudo systemctl restart wizard-staff.service
+sudo systemctl status wizard-staff.service
+```
+
+After updating only Python code, restart the service. If the repository's
+service definition changes, repeat the install step, reapply any custom paths,
+then run `daemon-reload` and restart. Existing overrides made with
+`systemctl edit` still take precedence; inspect the effective definition with
+`sudo systemctl cat wizard-staff.service`.
+
+View logs or restart after updating the code:
+
+```bash
+sudo journalctl -u wizard-staff.service -b -f
+sudo systemctl restart wizard-staff.service
+```
+
+To stop the staff now and disable automatic startup on future boots:
+
+```bash
+sudo systemctl disable --now wizard-staff.service
+```
+
+To stop it temporarily while keeping automatic startup enabled:
+
+```bash
+sudo systemctl stop wizard-staff.service
+```
+
+To enable it again and start it immediately:
+
+```bash
+sudo systemctl enable --now wizard-staff.service
+```
+
+See the [systemd service documentation](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)
+and [systemctl documentation](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html).

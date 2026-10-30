@@ -18,6 +18,7 @@ GATHERING_PHRASE = tuple((started / 2.5, strength) for started, strength in
 GATHERING_TRAVEL_SECONDS = 1.3  # Initial speed reference, before acceleration.
 GATHERING_FLASH_SECONDS = 0.6
 SPELL_DURATIONS = {"twisting_ribbons": 5.0, "american_flag": 8.0}
+RIBBON_RELEASE_SECONDS = 1.2
 SPELL_NAMES = frozenset((*SPELL_DURATIONS, "gathering_spell"))
 
 
@@ -67,13 +68,16 @@ def _smooth(value):
     return value * value * (3 - 2 * value)
 
 
-def twisting_ribbons(elapsed, geometry, max_brightness):
+def twisting_ribbons(elapsed, geometry, max_brightness, continuation=False, stop_at=None):
     """Grow two opposing ribbons, twist them, then let their light settle."""
-    if elapsed >= SPELL_DURATIONS["twisting_ribbons"]:
+    duration = (stop_at + RIBBON_RELEASE_SECONDS if stop_at is not None else
+                None if continuation else SPELL_DURATIONS["twisting_ribbons"])
+    if duration is not None and elapsed >= duration:
         return [], True
     vectors = []
     growth = _smooth(elapsed / 1.4)
-    fade = 1 - _smooth((elapsed - 3.8) / 0.7)
+    fade = (1.0 if duration is None else
+            1 - _smooth((elapsed - (duration - RIBBON_RELEASE_SECONDS)) / 0.7))
     channels = geometry.channels
     channel_count = len(channels)
     for channel, path in enumerate(channels):
@@ -93,8 +97,8 @@ def twisting_ribbons(elapsed, geometry, max_brightness):
         vectors.append(LightVector(path, tuple(samples), brightness=fade,
                                    brightness_override=0.65 * max_brightness))
     # A quiet release after the stem fades gives the effect an ending.
-    if 4.0 <= elapsed < 5.0:
-        age = elapsed - 4.0
+    if duration is not None and duration - 1.0 <= elapsed < duration:
+        age = elapsed - (duration - 1.0)
         level = math.sin(math.pi * age) ** 2
         vectors.append(solid(geometry.orb, (30, 115, 255), 0.5 * level,
                              brightness_override=max_brightness))
@@ -181,7 +185,7 @@ def spell_vectors(name, elapsed, geometry, max_brightness, options=None,
     if name == "american_flag":
         return american_flag(elapsed, geometry, max_brightness, continuation, stop_at)
     if name == "twisting_ribbons":
-        return twisting_ribbons(elapsed, geometry, max_brightness)
+        return twisting_ribbons(elapsed, geometry, max_brightness, continuation, stop_at)
     if name == "gathering_spell":
         return gathering_spell(elapsed, geometry, max_brightness, options)
     raise ValueError(f"Unknown spell: {name}")

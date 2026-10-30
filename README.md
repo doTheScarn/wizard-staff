@@ -96,14 +96,14 @@ short-medium-short descent/fill gesture:
 | Gesture | Slot | Effect |
 | --- | --- | --- |
 | `dit` | 1-4 select directly | Advance to the next base pattern and keep it selected |
-| `dit_dah_dit` | a | Icy drop and red fill at 1.5 times their former speeds, then six white boundaries with cyan/dark/red/dark/cyan bands descend; ten two-row cyan bands with two dark rows between them overwrite upward; cyan orb fades after the last band clears |
+| `dit_dah_dit` | a | Icy drop and red fill at 1.5 times their former speeds, then six white boundaries with cyan/dark/red/dark/cyan bands descend; ten two-row cyan bands with six dark rows between them overwrite upward; cyan orb fades after the last band clears |
 | `dit_dit` | b | Growing groups of varied, two-wrap upward trails; quiet yellow orb flashes brighter blue on the first light arrival, with a 15 ms rise and 600 ms fade |
 | `dah` | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating one column per second under a subdued white orb |
 | `hold` | d | Slower upward lights and a blue orb while held; release pauses for 200 ms with the orb blue before launching the burst; the orb stays blue until the first burst vector arrives, then bright purple with rapid white flashes |
 | `dit_dah` | e | Original alternating blue and green pairs with linear 30-wrap fading tails launch from the center toward both ends twice per second; orb stays dark |
 | `dit_hold` | f | Four-pixel bars cycle through all eight familiar saturated colors in shuffled order before repeating, and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
 | `dit_dit_dit` | g | Interactive red shots spanning two solid red wraps: the leading wrap at configured maximum brightness, the trailing wrap at one third; dits shoot and a hold exits |
-| `dah_dit` | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds |
+| `dah_dit` | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds, or continue while held |
 | `dah_dah` | i | Two tightly spaced triplets accelerate upward at high (14 wraps/s^2); the second starts as the first set of tails clears, without waiting for orb flashes; arrival and duration follow the actual motion |
 | `dit_dit_dah` | j | Red orb and upper stem third, white middle third, blue lower third; strong traveling brightness ripples soften between gusts; 8 seconds, or continue while held |
 
@@ -138,10 +138,13 @@ base selection interrupts the handoff; base patterns do not fade automatically.
 Button timings are in `wizard_staff/config.py`; slot assignments and optional
 pattern flags are in `wizard_staff/patterns.py`. New spell choreography and
 shared ember/mist/red palettes are in `wizard_staff/spell_effects.py`.
-Patterns b (`dit_dit`), c (`dah`), e (`dit_dah`), and j (`dit_dit_dah`,
-American flag) can be extended by pressing and holding while they run.
+Patterns b (`dit_dit`), c (`dah`), e (`dit_dah`), h (`dah_dit`,
+twisting ribbons), and j (`dit_dit_dah`, American flag) can be extended by
+pressing and holding while they run.
 Releasing stops new launches and lets active vectors clear; the flag fades over
-half a second from release. Pattern e normally launches for three seconds.
+half a second from release. Twisting ribbons keep rotating while held, then
+fade their stem and play the quiet blue orb ending over 1.2 seconds from release.
+Pattern e normally launches for three seconds.
 
 The descent/fill finale starts after the red fill and orb flashes. Six white
 lights descend from the top at constant speeds in the ratio 6:5:4:3:2:1.
@@ -149,8 +152,9 @@ From the fastest to the slowest boundary, the spaces are cyan, dark, red, dark,
 cyan. The leading boundary replaces the old red as it travels down. As soon as
 it reaches the bottom, a finite train rises from the bottom, overwriting the
 still-descending bands: ten cyan bands, each two vertical rows wide, separated
-by two dark rows. A row spans `leds_per_repeat` stem LEDs, including with two
-physical turns per repeat. Behind the final band the stem stays dark. The orb
+by six dark rows (triple the previous gap). A row spans `leds_per_repeat` stem
+LEDs, including with two physical turns per repeat. Behind the final band the
+stem stays dark. The orb
 turns cyan on the first band arrival, stays cyan until the tenth clears the top,
 then fades to black over 0.6 seconds. Timings and band count are in
 `wizard_staff/effects.py`.

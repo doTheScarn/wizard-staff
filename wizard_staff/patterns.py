@@ -21,7 +21,7 @@ PATTERN_OPTIONS = {
     "dit_dah": {"sequence": ("dit", "dah"),
                      "effect": "opposed_pairs", "extend_on_hold": True, "gamma": 1.0},
     "dah_dit": {"sequence": ("dah", "dit"),
-                     "effect": "twisting_ribbons"},
+                     "effect": "twisting_ribbons", "extend_on_hold": True},
     "dah_dah": {"sequence": ("dah", "dah"),
                       "effect": "gathering_spell", "upward_acceleration": "high"},
     "dit_dit_dit": {"sequence": ("dit", "dit", "dit"),

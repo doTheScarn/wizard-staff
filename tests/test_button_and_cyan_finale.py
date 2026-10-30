@@ -57,6 +57,7 @@ class ButtonAndFinaleTests(unittest.TestCase):
     def test_requested_patterns_continue_beyond_normal_end_and_finish_on_release(self):
         for slot, effect in (("dit_dit", "upward_spirals"),
                              ("dit_dah", "opposed_pairs"),
+                             ("dah_dit", "twisting_ribbons"),
                              ("dit_dit_dah", "american_flag")):
             with self.subTest(effect=effect):
                 staff = WizardStaff()
@@ -102,6 +103,21 @@ class ButtonAndFinaleTests(unittest.TestCase):
                                        268 - 268 / 1.5 * old_age +
                                        0.5 * acceleration * old_age ** 2)
 
+    def test_ribbons_release_plays_ending_even_before_original_timeout(self):
+        geometry = StaffGeometry.from_config(StaffConfig())
+        vectors, done = manual_vectors("twisting_ribbons", 2, geometry,
+                                       continuation=True, stop_at=2)
+        self.assertFalse(done)
+        self.assertTrue(all(vector.brightness == 1.0 for vector in vectors))
+        later, done = manual_vectors("twisting_ribbons", 2.75, geometry, stop_at=2)
+        self.assertFalse(done)
+        frame = render(later, geometry.total_leds)
+        self.assertTrue(any(any(rgb) for rgb in frame[:geometry.orb_leds]))
+        self.assertFalse(any(any(rgb) for rgb in frame[geometry.orb_leds:]))
+        self.assertTrue(manual_vectors("twisting_ribbons", 3.2, geometry, stop_at=2)[1])
+        self.assertFalse(manual_vectors("twisting_ribbons", 4.9, geometry)[1])
+        self.assertTrue(manual_vectors("twisting_ribbons", 5, geometry)[1])
+
     @staticmethod
     def finale_frame(age, geometry):
         vectors, done = descent_finale_vectors(age, geometry, 0.5)
@@ -143,12 +159,12 @@ class ButtonAndFinaleTests(unittest.TestCase):
                 before, _ = self.finale_frame(timing.first_arrival - 0.0001, geometry)
                 self.assertFalse(any(before[0]))
                 cyan_rows = []
-                for row in range(40):
+                for row in range(80):
                     age = (timing.first_arrival +
                            (row + 0.5) * geometry.leds_per_repeat / timing.rise_speed)
                     frame, _ = self.finale_frame(age, geometry)
                     cyan_rows.append(frame[geometry.orb_leds] == (0, 255, 255))
-                self.assertEqual(cyan_rows, [True, True, False, False] * 10)
+                self.assertEqual(cyan_rows, ([True, True] + [False] * 6) * 10)
                 starts = sum(on and (i == 0 or not cyan_rows[i - 1])
                              for i, on in enumerate(cyan_rows))
                 self.assertEqual(starts, 10)

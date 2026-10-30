@@ -10,7 +10,7 @@ from .effects import (
     release_burst_duration,
     upward_spiral_effect_duration,
 )
-from .spell_effects import SPELL_DURATIONS, spell_duration
+from .spell_effects import SPELL_DURATIONS, RIBBON_RELEASE_SECONDS, spell_duration
 
 PATTERN_ROWS = (
     ("a", "a", "Descent fill"),
@@ -102,6 +102,9 @@ def status_snapshot(staff, player, now):
             remaining = None
         elif effect == "american_flag" and staff.extension_stop_at is not None:
             remaining = (staff.effect_started_at + staff.extension_stop_at + 0.5 - now)
+        elif effect == "twisting_ribbons" and staff.extension_stop_at is not None:
+            remaining = (staff.effect_started_at + staff.extension_stop_at +
+                         RIBBON_RELEASE_SECONDS - now)
         elif effect == "descent_fill":
             remaining = (staff.effect_started_at +
                          descent_fill_duration(staff.geometry,
@@ -112,7 +115,8 @@ def status_snapshot(staff, player, now):
                                                 staff.effect_options) - now)
         else:
             remaining = staff.effect_started_at + EFFECT_LENGTHS[effect] - now
-        if (effect in ("upward_spirals", "channel_wave", "opposed_pairs", "american_flag")
+        if (effect in ("upward_spirals", "channel_wave", "opposed_pairs", "american_flag",
+                       "twisting_ribbons")
                 and staff.extension_stop_at is None and
                 (staff.extension_candidate is not None or staff.extension_held)):
             remaining = None

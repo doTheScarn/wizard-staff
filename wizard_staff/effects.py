@@ -36,6 +36,8 @@ DESCENT_FALL_SECONDS = 1.0 / DESCENT_SPEED_MULTIPLIER
 DESCENT_FILL_SECONDS = 1.5 / DESCENT_SPEED_MULTIPLIER
 DESCENT_HOLD_SECONDS = 1.0
 DESCENT_CYAN_BANDS = 10
+DESCENT_CYAN_ROWS = 2
+DESCENT_DARK_ROWS = 6
 DESCENT_ORB_FADE_SECONDS = 0.6
 CHANNEL_WAVE_TOTAL_SECONDS = 3.0
 UPWARD_FLASH_ATTACK_SECONDS = 0.015
@@ -403,8 +405,9 @@ class DescentFinaleTiming:
 def descent_finale_timing(geometry):
     """Finale times relative to the six-boundary descent's launch."""
     speed = len(geometry.stem) / DESCENT_FILL_SECONDS
-    # Ten two-row cyan bands, with two dark rows between adjacent bands.
-    train_length = (4 * DESCENT_CYAN_BANDS - 2) * geometry.leds_per_repeat
+    # Ten two-row cyan bands, with six dark rows between adjacent bands.
+    train_length = ((DESCENT_CYAN_ROWS + DESCENT_DARK_ROWS) * DESCENT_CYAN_BANDS -
+                    DESCENT_DARK_ROWS) * geometry.leds_per_repeat
     first = DESCENT_FALL_SECONDS + len(geometry.stem) / speed
     last = first + train_length / speed
     return DescentFinaleTiming(DESCENT_FALL_SECONDS, speed, train_length,
@@ -429,7 +432,8 @@ def descent_finale_vectors(elapsed, geometry, max_brightness):
         if elapsed >= timing.fall and index >= front:
             distance = index - front
             row = math.floor(distance / geometry.leds_per_repeat)
-            color = ((0, 255, 255) if distance < timing.train_length and row % 4 < 2
+            color = ((0, 255, 255) if distance < timing.train_length and
+                     row % (DESCENT_CYAN_ROWS + DESCENT_DARK_ROWS) < DESCENT_CYAN_ROWS
                      else (0, 0, 0))
         elif index in white:
             color = (255, 255, 255)

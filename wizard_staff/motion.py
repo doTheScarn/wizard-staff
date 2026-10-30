@@ -3,7 +3,7 @@
 import math
 
 
-ACCELERATION_LEVELS = {"low": 2.0, "med": 4.0, "high": 6.0}
+ACCELERATION_LEVELS = {"low": 6.0, "med": 10.0, "high": 14.0}
 
 
 def downward_acceleration(level, units_per_wrap=1.0):
@@ -40,3 +40,20 @@ def time_to_position(start, target, velocity, acceleration, direction=None):
                   (direction is None or
                    (velocity_at(velocity, acceleration, t) * direction > 0))]
     return min(candidates) if candidates else None
+
+
+def directional_acceleration(level, direction, units_per_wrap=1.0):
+    """Acceleration toward either end: +1 down, -1 up."""
+    if direction not in (-1, 1):
+        raise ValueError("direction must be -1 (up) or 1 (down)")
+    return direction * downward_acceleration(level, units_per_wrap)
+
+
+def pattern_acceleration(options, units_per_wrap=1.0):
+    """Read optional upward or downward acceleration from a pattern mapping."""
+    up = options.get("upward_acceleration", "off")
+    down = options.get("downward_acceleration", "off")
+    if up not in (None, "off") and down not in (None, "off"):
+        raise ValueError("choose upward or downward acceleration, not both")
+    return (-downward_acceleration(up, units_per_wrap) if up not in (None, "off")
+            else downward_acceleration(down, units_per_wrap))

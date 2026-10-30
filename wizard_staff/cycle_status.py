@@ -1,15 +1,17 @@
 """In-place terminal status for the virtual button cycle."""
 
+from .controller import EFFECT_FADE_SECONDS
 from .effects import (
     CHANNEL_WAVE_TOTAL_SECONDS,
     DESCENT_TOTAL_SECONDS,
-    RELEASE_BURST_SECONDS,
+    RELEASE_BURST_SECONDS, RELEASE_DELAY_SECONDS,
     UNSET_INDICATOR_SECONDS,
     descent_fill_duration,
     opposed_pair_effect_duration,
     release_burst_duration,
     upward_spiral_effect_duration,
 )
+from .spell_effects import SPELL_DURATIONS, spell_duration
 
 PATTERN_ROWS = (
     ("a", "a", "Descent fill"),
@@ -19,20 +21,27 @@ PATTERN_ROWS = (
     ("c", "c", "Channel wave"),
     ("base_c", "3", "Bouncing vectors"),
     ("d", "d", "Charge / release burst"),
-    ("base_d", "1", "Green spiral"),
+    ("base_d", "4", "Spring streams"),
     ("e", "e", "Opposed pairs"),
-    ("base_e", "2", "Green channels"),
+    ("base_e", "1", "Green spiral"),
     ("f", "f", "Stacking drops / unload"),
-    ("base_f", "3", "Bouncing vectors"),
+    ("base_f", "2", "Green channels"),
     ("g", "g", "Interactive red shots"),
     ("base_g", "1", "Green spiral"),
+    ("h", "h", "Twisting ribbons"),
+    ("base_h", "4", "Spring streams"),
+    ("i", "i", "Gathering spell"),
+    ("base_i", "1", "Green spiral"),
+    ("j", "j", "American flag"),
+    ("base_j", "2", "Green channels"),
 )
 PATTERN_NAMES = {key: name for key, _, name in PATTERN_ROWS}
 EFFECT_LENGTHS = {
     "descent_fill": DESCENT_TOTAL_SECONDS,
     "channel_wave": CHANNEL_WAVE_TOTAL_SECONDS,
-    "release_burst": RELEASE_BURST_SECONDS,
+    "release_burst": RELEASE_BURST_SECONDS + RELEASE_DELAY_SECONDS,
     "unset": UNSET_INDICATOR_SECONDS,
+    **SPELL_DURATIONS,
 }
 EFFECT_ROWS = {
     "descent_fill": "a",
@@ -45,6 +54,9 @@ EFFECT_ROWS = {
     "stack_drop": "f",
     "stack_unload": "f",
     "interactive_red_shots": "g",
+    "twisting_ribbons": "h",
+    "gathering_spell": "i",
+    "american_flag": "j",
 }
 
 
@@ -58,10 +70,10 @@ def _next_effect_at(player):
     if player.current_key is None:
         return None
     key = player.current_key
-    if key in ("a", "b"):
+    if key in ("a", "b", "c", "e", "h", "i"):
         delay = player.config.debounce_s + player.config.multi_press_s
         return player.started_at + player.intervals[-1][1] + delay
-    if key in ("c", "e"):
+    if key in ("g", "j"):
         return player.started_at + player.intervals[-1][1] + player.config.debounce_s
     start = player.intervals[-1][0]
     return player.started_at + start + player.config.debounce_s + player.config.long_press_s
@@ -85,6 +97,9 @@ def status_snapshot(staff, player, now):
             remaining = (staff.effect_started_at +
                          opposed_pair_effect_duration(staff.geometry,
                                                       staff.effect_options) - now)
+        elif effect == "gathering_spell":
+            remaining = (staff.effect_started_at +
+                         spell_duration(effect, staff.geometry, staff.effect_options) - now)
         elif effect == "interactive_red_shots":
             remaining = None
         elif effect == "descent_fill":
@@ -97,6 +112,10 @@ def status_snapshot(staff, player, now):
                                                 staff.effect_options) - now)
         else:
             remaining = staff.effect_started_at + EFFECT_LENGTHS[effect] - now
+        if staff.fade_started_at is not None:
+            remaining = staff.fade_started_at + EFFECT_FADE_SECONDS - now
+        elif remaining is not None and effect not in ("charge", "stack_drop"):
+            remaining += EFFECT_FADE_SECONDS
         key = EFFECT_ROWS[effect]
     else:
         if player.base_until is not None and now < player.base_until:

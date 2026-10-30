@@ -4,17 +4,20 @@ from collections import deque
 
 
 VIRTUAL_GESTURES = (
-    ("a", "one quick press"),
-    ("b", "two quick presses"),
-    ("c", "medium press"),
-    ("d", "long hold"),
-    ("e", "quick press, then medium press (opposed pairs)"),
-    ("f", "quick press, then long hold"),
-    ("g", "three quick presses (interactive red shots)"),
+    ("a", "dit"),
+    ("b", "dit_dit"),
+    ("c", "dah"),
+    ("d", "hold"),
+    ("e", "dit_dah (opposed pairs)"),
+    ("f", "dit_hold"),
+    ("g", "dit_dit_dit (interactive red shots)"),
+    ("h", "dah_dit (twisting ribbons)"),
+    ("i", "dah_dah (gathering spell)"),
+    ("j", "dit_dit_dah (American flag)"),
     ("s", "interactive red shot"),
     ("x", "simulate a long press to exit interactive shots"),
 )
-CYCLE_GESTURES = VIRTUAL_GESTURES[:7]
+CYCLE_GESTURES = VIRTUAL_GESTURES[:-2]
 LABELS = dict(VIRTUAL_GESTURES)
 HOLD_EFFECT_SECONDS = 5.0
 BASE_INTERVAL_SECONDS = 5.0
@@ -40,44 +43,53 @@ class VirtualButtonPlayer:
         self.base_after_key = None
         self.base_selection = None
         self.announcements = []
+        self.interrupt_requested = False
         self.interactive_cycle_started_at = None
         self.interactive_cycle_exiting = False
 
     def enqueue(self, text):
         key = text.strip().lower()
-        if key not in LABELS and key not in ("1", "2", "3"):
+        if key not in LABELS and key not in ("1", "2", "3", "4"):
             return False
         self.pending.append(key)
         return True
 
     def _intervals_for(self, key):
         config = self.config
-        quick = config.quick_press_max_s - (
+        dit = config.quick_press_max_s - (
             config.quick_press_max_s - config.debounce_s) / 4
         gap = (config.debounce_s + config.multi_press_s) / 2
-        medium = (config.quick_press_max_s + config.long_press_s) / 2
-        hold = config.long_press_s + HOLD_EFFECT_SECONDS + config.debounce_s
+        dah = (config.quick_press_max_s + config.long_press_s) / 2
+        hold_seconds = HOLD_EFFECT_SECONDS + (1.0 if key == "f" else 0.0)
+        hold = config.long_press_s + hold_seconds + config.debounce_s
         # The classifier starts its hold timer only after the press debounce.
         # Keep the raw signal asserted long enough to cross that threshold.
         exit_hold = config.long_press_s + 2 * config.debounce_s + 0.02
         if key == "a":
-            return ((0.0, quick),)
+            return ((0.0, dit),)
         if key == "b":
-            return ((0.0, quick), (quick + gap, 2 * quick + gap))
+            return ((0.0, dit), (dit + gap, 2 * dit + gap))
         if key == "c":
-            return ((0.0, medium),)
+            return ((0.0, dah),)
         if key == "d":
             return ((0.0, hold),)
         if key == "e":
-            return ((0.0, quick), (quick + gap, quick + gap + medium))
+            return ((0.0, dit), (dit + gap, dit + gap + dah))
         if key == "g":
-            return tuple((index * (quick + gap),
-                          index * (quick + gap) + quick) for index in range(3))
+            return tuple((index * (dit + gap),
+                          index * (dit + gap) + dit) for index in range(3))
+        if key == "h":
+            return ((0.0, dah), (dah + gap, dah + gap + dit))
+        if key == "i":
+            return ((0.0, dah), (dah + gap, 2 * dah + gap))
+        if key == "j":
+            return ((0.0, dit), (dit + gap, 2 * dit + gap),
+                    (2 * (dit + gap), 2 * (dit + gap) + dah))
         if key == "s":
-            return ((0.0, quick),)
+            return ((0.0, dit),)
         if key == "x":
             return ((0.0, exit_hold),)
-        return ((0.0, quick), (quick + gap, quick + gap + hold))
+        return ((0.0, dit), (dit + gap, dit + gap + hold))
 
     def _start(self, key, now):
         self.current_key = key
@@ -102,10 +114,26 @@ class VirtualButtonPlayer:
         """Return the raw button state to pass to WizardStaff.step()."""
         self.announcements = []
         self.base_selection = None
+        self.interrupt_requested = False
+        if self.mode == "input" and self.pending and self.pending[0] in ("1", "2", "3", "4"):
+            self.current_key = None
+            self.base_selection = int(self.pending.popleft())
+            self.interrupt_requested = True
+            self.announcements.append(f"Base pattern {self.base_selection}")
+            return False
+        if (self.mode == "input" and self.current_key is not None and self.pending
+                and effect_active and self.effect_seen
+                and not (interactive and self.pending[0] in ("s", "x"))):
+            # A new pattern can interrupt a simulated hold or an active effect.
+            # Interactive shot commands retain their independent tap timing.
+            self.current_key = None
+        if (self.mode == "input" and self.current_key is not None and
+                now - self.started_at >= self.script_end):
+            self.current_key = None
         if (self.mode == "cycle" and
                 (self.interactive_cycle_exiting or
                  self.interactive_cycle_started_at is not None) and
-                not interactive):
+                not interactive and not effect_active):
             self.interactive_cycle_started_at = None
             self.interactive_cycle_exiting = False
             self.base_until = now + BASE_INTERVAL_SECONDS
@@ -128,17 +156,18 @@ class VirtualButtonPlayer:
                 self.base_until = now + BASE_INTERVAL_SECONDS
                 self.base_after_key = finished_key
                 self.base_number = (1 if finished_key == "g" else
-                                    ((self.next_cycle_index - 1) % 3) + 1)
+                                    (next(index for index, (key, _) in enumerate(CYCLE_GESTURES)
+                                          if key == finished_key) % 4) + 1)
                 self.base_selection = self.base_number
                 self.announcements.append(
                     f"Base pattern {self.base_number} for 5 seconds")
         if (self.mode == "cycle" and interactive and
                 self.interactive_cycle_started_at is not None):
             elapsed = now - self.interactive_cycle_started_at
-            quick = self.config.quick_press_max_s - (
+            dit = self.config.quick_press_max_s - (
                 self.config.quick_press_max_s - self.config.debounce_s) / 4
-            intervals = ((0.25, 0.25 + quick), (1.15, 1.15 + quick),
-                         (2.5, 2.5 + quick), (3.9, 3.9 +
+            intervals = ((0.25, 0.25 + dit), (1.15, 1.15 + dit),
+                         (2.5, 2.5 + dit), (3.9, 3.9 +
                           self.config.long_press_s + 2 * self.config.debounce_s +
                           0.02))
             if elapsed >= intervals[-1][1]:
@@ -149,7 +178,7 @@ class VirtualButtonPlayer:
                 return any(start <= elapsed < end for start, end in intervals)
 
         if (self.current_key is None and
-                (not effect_active or interactive) and
+                (self.mode == "input" or not effect_active or interactive) and
                 self.interactive_cycle_started_at is None and
                 not self.interactive_cycle_exiting):
             if self.mode == "cycle":
@@ -160,10 +189,11 @@ class VirtualButtonPlayer:
                     self._start(key, now)
             elif self.pending:
                 key = self.pending.popleft()
-                if key in ("1", "2", "3"):
+                if key in ("1", "2", "3", "4"):
                     self.base_selection = int(key)
                     self.announcements.append(f"Base pattern {key}")
                 else:
+                    self.interrupt_requested = not (interactive and key in ("s", "x"))
                     self._start(key, now)
 
         if self.current_key is None:

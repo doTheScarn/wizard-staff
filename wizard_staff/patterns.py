@@ -1,37 +1,42 @@
 """Button sequences and optional per-pattern behavior."""
 
 
-# Omitted downward_acceleration means "off". Supported levels are low (2),
-# med (4), and high (6) physical wraps per second squared. Upward motion may
+# Omitted downward_acceleration means "off". Supported levels are low (6),
+# med (10), and high (14) physical wraps per second squared. Upward motion may
 # reverse under gravity by default; set allow_reversal=False to stop and fade.
 BASE_PATTERN_OPTIONS = {
-    "green_spiral": {"downward_acceleration": "med"},
+    "green_spiral": {"downward_acceleration": "low"},
     "green_channels": {},
-    "bounce_vectors": {"downward_acceleration": "high"},
+    "bounce_vectors": {"downward_acceleration": "low"},
+    "spring_streams": {},
 }
 
 
 PATTERN_OPTIONS = {
-    "quick": {"sequence": ("short",), "effect": "descent_fill"},
-    "medium": {"sequence": ("medium",), "effect": "channel_wave",
+    "dit": {"sequence": ("dit",), "effect": "descent_fill",
+              "downward_acceleration": "low"},
+    "dah": {"sequence": ("dah",), "effect": "channel_wave",
                "extend_on_hold": True},
-    "double_quick": {"sequence": ("short", "short"),
+    "dit_dit": {"sequence": ("dit", "dit"),
                      "effect": "upward_spirals", "extend_on_hold": True},
-    "quick_medium": {"sequence": ("short", "medium"),
-                     "effect": "opposed_pairs", "extend_on_hold": True},
-    "medium_quick": {"sequence": ("medium", "short"), "effect": None},
-    "double_medium": {"sequence": ("medium", "medium"), "effect": None},
-    "short_short_short": {"sequence": ("short", "short", "short"),
+    "dit_dah": {"sequence": ("dit", "dah"),
+                     "effect": "opposed_pairs", "extend_on_hold": True, "gamma": 1.0},
+    "dah_dit": {"sequence": ("dah", "dit"),
+                     "effect": "twisting_ribbons"},
+    "dah_dah": {"sequence": ("dah", "dah"),
+                      "effect": "gathering_spell", "upward_acceleration": "high"},
+    "dit_dit_dit": {"sequence": ("dit", "dit", "dit"),
                           "effect": "interactive_red_shots", "interactive": True},
-    "short_short_medium": {"sequence": ("short", "short", "medium"), "effect": None},
-    "short_medium_short": {"sequence": ("short", "medium", "short"), "effect": None},
-    "short_medium_medium": {"sequence": ("short", "medium", "medium"), "effect": None},
-    "medium_short_short": {"sequence": ("medium", "short", "short"), "effect": None},
-    "medium_short_medium": {"sequence": ("medium", "short", "medium"), "effect": None},
-    "medium_medium_short": {"sequence": ("medium", "medium", "short"), "effect": None},
-    "medium_medium_medium": {"sequence": ("medium", "medium", "medium"), "effect": None},
-    "hold": {"sequence": ("long",), "effect": "charge", "hold": True},
-    "quick_hold": {"sequence": ("short", "long"), "effect": "stack_drop",
+    "dit_dit_dah": {"sequence": ("dit", "dit", "dah"),
+                           "effect": "american_flag"},
+    "dit_dah_dit": {"sequence": ("dit", "dah", "dit"), "effect": None},
+    "dit_dah_dah": {"sequence": ("dit", "dah", "dah"), "effect": None},
+    "dah_dit_dit": {"sequence": ("dah", "dit", "dit"), "effect": None},
+    "dah_dit_dah": {"sequence": ("dah", "dit", "dah"), "effect": None},
+    "dah_dah_dit": {"sequence": ("dah", "dah", "dit"), "effect": None},
+    "dah_dah_dah": {"sequence": ("dah", "dah", "dah"), "effect": None},
+    "hold": {"sequence": ("hold",), "effect": "charge", "hold": True},
+    "dit_hold": {"sequence": ("dit", "hold"), "effect": "stack_drop",
                    "hold": True},
 }
 

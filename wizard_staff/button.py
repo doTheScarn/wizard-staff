@@ -1,4 +1,4 @@
-"""Debounce a momentary button and classify short press sequences."""
+"""Debounce a momentary button and classify dit/dah/hold sequences."""
 
 from .patterns import PATTERNS_BY_SEQUENCE, PATTERN_OPTIONS
 
@@ -46,15 +46,15 @@ class ButtonInterpreter:
                         events.append("interactive_shot")
                 elif self.hold_started or duration >= self.config.long_press_s:
                     if not self.hold_started:
-                        self.hold_event = ("quick_hold" if self.pending_presses == ["short"]
+                        self.hold_event = ("dit_hold" if self.pending_presses == ["dit"]
                                            else "hold")
                         self.pending_presses.clear()
                         self.last_press_at = None
                         events.append(self.hold_event + "_start")
                     events.append(self.hold_event + "_release")
                 else:
-                    press_type = ("short" if duration <= self.config.quick_press_max_s
-                                  else "medium")
+                    press_type = ("dit" if duration <= self.config.quick_press_max_s
+                                  else "dah")
                     self.pending_presses.append(press_type)
                     self.last_press_at = now
                     if len(self.pending_presses) == 3:
@@ -67,7 +67,7 @@ class ButtonInterpreter:
                 if self.pressed_interactive:
                     events.append("interactive_exit")
                     return events
-                self.hold_event = ("quick_hold" if self.pending_presses == ["short"]
+                self.hold_event = ("dit_hold" if self.pending_presses == ["dit"]
                                    else "hold")
                 self.pending_presses.clear()
                 self.last_press_at = None

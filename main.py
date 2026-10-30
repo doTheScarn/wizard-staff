@@ -9,6 +9,7 @@ import time
 from wizard_staff.config import StaffConfig
 from wizard_staff.controller import WizardStaff
 from wizard_staff.cycle_status import CycleStatusDisplay, PATTERN_ROWS
+from wizard_staff.patterns import PATTERN_OPTIONS
 from wizard_staff.virtual_button import VIRTUAL_GESTURES, VirtualButtonPlayer
 
 
@@ -31,6 +32,10 @@ def parse_args():
     parser.add_argument("--frame-rate", type=float, default=60)
     parser.add_argument("--brightness", type=float, default=1.0,
                         help="Additional hardware output multiplier (default: 1.0).")
+    parser.add_argument("--orb-gain", type=float, default=1.5,
+                        help="Independent orb intensity multiplier (default: 1.5).")
+    parser.add_argument("--gamma", type=float, default=2.2,
+                        help="Perceived color/fade correction; 1.0 disables it (default: 2.2).")
     parser.add_argument("--led-pin", default="D18")
     parser.add_argument("--data-start", choices=("top", "bottom"), default=DATA_START)
     parser.add_argument("--pixel-order", default="RGB")
@@ -39,7 +44,7 @@ def parse_args():
     parser.add_argument("--button-gpio", type=int, default=17)
     parser.add_argument("--virtual-button", choices=("cycle", "input"),
                         help="Cycle gestures with numbered base gaps, or enter "
-                             "1-3 for base patterns, a-g for patterns, s for an "
+                             "1-4 for base patterns, a-j for patterns, s for an "
                              "interactive shot, and x to exit that mode; "
                              "overrides the GPIO button.")
     parser.add_argument("--dry-run", action="store_true")
@@ -47,11 +52,13 @@ def parse_args():
                         help="Print measured frame rate and update time every 2 seconds.")
     parser.add_argument("--seconds", type=float, default=None,
                         help="Stop after this many seconds (useful for a preview).")
-    parser.add_argument("--effect", choices=("quick", "double_quick", "medium",
-                                              "hold_start", "quick_medium",
-                                              "quick_hold_start",
-                                              "short_short_short",
-                                              "interactive_red_shots"),
+    effect_choices = tuple(dict.fromkeys(
+        (*PATTERN_OPTIONS,
+         *(name + "_start" for name, option in PATTERN_OPTIONS.items()
+           if option.get("hold")),
+         *(option["effect"] for option in PATTERN_OPTIONS.values()
+           if option.get("effect")))))
+    parser.add_argument("--effect", choices=effect_choices,
                         help="Start a slot immediately; useful with --dry-run.")
     args = parser.parse_args()
     if args.effect and args.virtual_button:
@@ -83,6 +90,7 @@ def main():
                          baseline_shaft_brightness=BASELINE_SHAFT_BRIGHTNESS,
                          baseline_orb_brightness=BASELINE_ORB_BRIGHTNESS,
                          max_brightness=MAX_BRIGHTNESS,
+                         gamma=args.gamma, orb_gain=args.orb_gain,
                          led_pin=args.led_pin, data_start=args.data_start,
                          pixel_order=args.pixel_order,
                          color_mapping=args.color_mapping, button_gpio=args.button_gpio)
@@ -143,9 +151,11 @@ def main():
             if virtual_button is not None:
                 pressed = virtual_button.tick(
                     now, staff.effect is not None,
-                    staff.effect == "interactive_red_shots")
+                    staff.effect == "interactive_red_shots" and staff.fade_started_at is None)
                 if virtual_button.base_selection is not None:
                     staff.select_base_pattern(virtual_button.base_selection, now)
+                elif virtual_button.interrupt_requested:
+                    staff.cancel_effect(reset_button=True)
                 if cycle_status is None:
                     for announcement in virtual_button.announcements:
                         print(announcement, flush=True)

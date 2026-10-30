@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from math import floor
+from functools import lru_cache
 from typing import Optional
 
 
@@ -24,21 +25,68 @@ def solid(path, color, brightness=1.0, brightness_override=None):
 
 
 def trail(path, color, position, length=4, brightness=1.0, direction=1,
-          wrap=False, brightness_override=None):
-    samples = tuple((-direction * i, tuple(round(c * (1 - i / length))
+          wrap=False, brightness_override=None, tail_power=1.0):
+    samples = tuple((-direction * i, tuple(round(c * (1 - i / length) ** tail_power)
                                       for c in color)) for i in range(length))
     return LightVector(tuple(path), samples, position, brightness, wrap,
                        brightness_override)
 
 
+def palette_color(palette, fraction):
+    """Interpolate an ordered head-to-tail palette in logical RGB."""
+    point = max(0.0, min(1.0, fraction)) * (len(palette) - 1)
+    index = min(floor(point), len(palette) - 1)
+    blend = point - index
+    following = palette[min(index + 1, len(palette) - 1)]
+    return tuple(round(a + (b - a) * blend)
+                 for a, b in zip(palette[index], following))
+
+
+def palette_trail(path, palette, position, length=4, brightness=1.0,
+                  direction=1, brightness_override=None, tail_brightness=1.0,
+                  head_length=1):
+    """A colored head, changing hue and fading toward the end of its tail."""
+    samples = []
+    for index in range(length):
+        fraction = index / max(1, length - 1)
+        color = palette_color(palette, fraction)
+        fade = (1 - index / length) * (1 if index < head_length else tail_brightness)
+        samples.append((-direction * index,
+                        tuple(round(channel * fade) for channel in color)))
+    return LightVector(tuple(path), tuple(samples), position,
+                       brightness=brightness,
+                       brightness_override=brightness_override)
+
+
+@lru_cache(maxsize=8)
+def _gamma_table(gamma):
+    return tuple(255 * (index / 255) ** gamma for index in range(256))
+
+
+def _gamma_level(value, table, gamma):
+    value = max(0.0, value)
+    if value >= 255:
+        return 255 * (value / 255) ** gamma
+    lower = floor(value)
+    fraction = value - lower
+    return table[lower] + (table[lower + 1] - table[lower]) * fraction
+
+
 def render(vectors, total_leds, orb_leds=None,
-           baseline_shaft_brightness=1.0, baseline_orb_brightness=1.0):
+           baseline_shaft_brightness=1.0, baseline_orb_brightness=1.0,
+           gamma=1.0, orb_gain=1.0):
+    # Convert authored colors/envelopes to PWM intensity before adding light.
+    # Region/override multipliers and fractional spatial coverage stay linear.
+    table = _gamma_table(gamma) if gamma != 1.0 else None
     frame = [[0.0, 0.0, 0.0] for _ in range(total_leds)]
     for vector in vectors:
         count = len(vector.path)
         if count == 0:
             continue
         for offset, color in vector.samples:
+            levels = tuple(channel * vector.brightness for channel in color)
+            if table is not None:
+                levels = tuple(_gamma_level(value, table, gamma) for value in levels)
             point = vector.position + offset
             lower = floor(point)
             fraction = point - lower
@@ -54,8 +102,9 @@ def render(vectors, total_leds, orb_leds=None,
                 if scale is None:
                     scale = (baseline_orb_brightness if orb_leds is not None and
                              led < orb_leds else baseline_shaft_brightness)
+                if orb_leds is not None and led < orb_leds:
+                    scale *= orb_gain
                 for channel in range(3):
-                    frame[led][channel] += (color[channel] * vector.brightness *
-                                            scale * weight)
+                    frame[led][channel] += levels[channel] * scale * weight
     return [tuple(max(0, min(255, round(c))) for c in led) for led in frame]
 

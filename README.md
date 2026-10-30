@@ -3,7 +3,7 @@
 A fixed NeoPixel staff built from the light-vector idea in `tire-pixel`. The
 first `orb_leds` logical pixels form the orb at the top. The next `stem_leds` pixels
 follow the helix from top to bottom. Patterns add independent orb, spiral, and
-vertical-channel vectors. There is no IMU or motion compensation.
+vertical-channel vectors, plus sparse spring paths that activate every third stem LED. There is no IMU or motion compensation.
 
 ## Layout
 
@@ -28,7 +28,29 @@ line is one vector even though its LEDs are separated along the string.
 `BASELINE_ORB_BRIGHTNESS = 0.2` for ordinary vectors. Effects can override the
 baseline per vector; bright sparks, bursts, and orb flashes use
 `MAX_BRIGHTNESS = 0.5`. This is a peak setting for those vectors, not a cap on
-the sum of overlapping RGB contributions.
+the sum of overlapping RGB contributions. Every orb contribution additionally
+receives an independent linear `orb_gain = 1.5` multiplier, after gamma correction.
+The orb can therefore exceed the shaft peak setting; only RGB 255 clips the sum.
+Use `--orb-gain 1.0` to compare with the earlier orb intensity.
+
+The `effects` branch uses gamma 2.2 for authored RGB values and brightness
+envelopes. Each vector is corrected before its baseline/override multiplier and
+before contributions are added. Those output multipliers and fractional-pixel
+coverage remain linear; clipping still happens after addition. A full-strength
+primary therefore keeps the same configured peak, while intermediate colors
+and fades change. Dry-run frames and live frames use the same correction.
+Pattern e uses gamma 1.0 to preserve its pre-branch appearance.
+Use `--gamma 1.0` for an uncorrected comparison, or try `--gamma 2.8` for a
+stronger curve. `StaffConfig.gamma` accepts 1.0 through 3.5.
+
+5050 describes the 5 mm package, not an exact LED model or measured response.
+Adafruit's [5050 NeoPixel description](https://www.adafruit.com/product/1379)
+includes WS2812B and SK6812 variants. Its
+[gamma guide](https://learn.adafruit.com/led-tricks-gamma-correction?view=all)
+uses an empirically chosen 2.8 and discusses loss of dim steps with 8-bit PWM.
+Our 2.2 starting point is a gentler estimate for this staff's dim tails, not a
+calibration of its particular LEDs. The existing RGB order and red/green output
+swap are independent of gamma correction.
 
 Measure the completed wrap before setting these values. The code does not need
 the total stem count to divide evenly by `leds_per_repeat`; the final partial
@@ -38,32 +60,44 @@ turn is handled automatically.
 
 Without virtual-button selection, the base patterns cycle every 18 seconds:
 
-1. A gently pulsing green orb with a brief white accent at each launch, and
-   fading lights falling along the helix at 48 stem LEDs per second.
-2. The same orb and launch accent with lights falling along vertical channels
-   at 9.6 vertical LEDs per second.
-3. A bright orange orb that turns dim red 100 ms before launching each white,
-   eight-LED vector. The first launch waits for its red cue. The vectors fall
-   at 120 stem LEDs per second at half their former brightness and stop just
-   above the eight-LED blue anchor. Downward acceleration is medium for this
-   pattern (4 physical wraps/s²); the vector reflects with the same speed and
-   gravity slows it as it rises. Rising and falling vectors cross near the
-   middle.
-   Rainbow sparks remain available in code but are out of the cycle.
+1. Near-white, two-wrap tails fall from the top at an initial 48 stem LEDs/s
+   with low downward acceleration. The green orb pulses once per launch,
+   peaking as the vector first enters the stem.
+2. Lights fall along four vertical channels at 9.6 vertical LEDs/s. The green
+   orb pulses twice per drop, with one peak aligned to each vector entering.
+3. White vectors reflect above a green anchor with a pronounced impact pulse.
+   They launch at 120 stem LEDs/s and low acceleration, 6 wraps/s^2. Falling
+   vectors are one third dimmer; rising vectors progressively dim toward the top.
+   Two flights overlap. A returning light remains absent for 200 ms before its
+   replacement launches. The brighter orange orb gives a red cue 60 ms before
+   each drop.
+4. Spring streams use three literal every-third-LED paths. Every 1.0 s, one
+   vector launches down from the top and another up from the bottom. Each
+   independently chooses a path, a familiar palette color, an initial speed
+   between 12 and 22 wraps/s, and low/medium/high acceleration toward its
+   destination. Vectors run at half the former intensity with quadratic, eight-wrap fading
+   tails. The orb is much brighter. Vectors can cross and overtake;
+   overlapping RGB contributions add and clip only at 255.
+
+Rainbow sparks remain available in code but are out of the cycle.
 
 The button has software debounce and a 0.38-second multi-press window:
 
 | Gesture | Slot | Effect |
 | --- | --- | --- |
-| One quick press | a | Light descends, then leads a steady, dim red fill back up; orb flashes |
-| Two quick presses | b | Overlapping groups of three upward spirals; brighter yellow orb flashes blue when each group arrives |
-| Medium press | c | Dimmer channel wave with a six-row dark gap, rising at 56 rows per second and rotating four times per second under a white orb |
-| Long press and hold | d | Slower upward lights and a blue orb while held; release keeps the orb blue until the first burst vector arrives, then bright purple with rapid white flashes |
-| Quick press then medium press | e | Alternating blue and green pairs of 30-wrap vectors launch from the center toward both ends twice per second; orb stays dark |
-| Quick press then long hold | f | Four-pixel bars drop and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
+| One quick press | a | Icy blue/violet tail descends, then leads a dim red fill back up with low acceleration; the fill follows the ring position; orb flashes |
+| Two quick presses | b | Growing groups of varied, two-wrap upward trails; quiet yellow orb flashes brighter blue on the first light arrival, with a 15 ms rise and 600 ms fade |
+| Medium press | c | Channel wave with a six-row dark gap, rising at 56 rows per second and rotating one column per second under a subdued white orb |
+| Long press and hold | d | Slower upward lights and a blue orb while held; release pauses for 200 ms with the orb blue before launching the burst; the orb stays blue until the first burst vector arrives, then bright purple with rapid white flashes |
+| Quick press then medium press | e | Original alternating blue and green pairs with linear 30-wrap fading tails launch from the center toward both ends twice per second; orb stays dark |
+| Quick press then long hold | f | Four-pixel bars cycle through all eight familiar saturated colors in shuffled order before repeating, and stack with the orb off; release unloads the bars under a slow-then-fast white orb ramp, then three flashes, a longer white hold, and a fade |
+| Three quick presses | g | Interactive red shots with a prominent two-pixel warm head and a dim red-to-crimson tail; short presses shoot and a long hold exits |
+| Medium then quick press | h | Opposing amber/blue ribbons grow up the channels, twist, fade, and leave a quiet blue orb response; 5 seconds |
+| Two medium presses | i | Two tightly spaced triplets accelerate upward at high (14 wraps/s^2); the second starts as the first set of tails clears, without waiting for orb flashes; arrival and duration follow the actual motion |
+| Two quick presses then medium press | j | Red orb and upper stem third, white middle third, blue lower third; strong traveling brightness ripples soften between gusts; 8 seconds |
 
-The button interpreter also defines the following short/medium sequences. The
-three-press sequences are currently unassigned and show the unset indicator:
+The button interpreter defines the following short/medium sequences. Unassigned
+sequences show the brief red unset indicator:
 
 | Sequence | Assignment |
 | --- | --- |
@@ -71,10 +105,10 @@ three-press sequences are currently unassigned and show the unset indicator:
 | One medium | Channel wave |
 | Two shorts | Upward spirals |
 | Short, then medium | Opposed pairs |
-| Medium, then short | Unassigned |
-| Two mediums | Unassigned |
+| Medium, then short | Twisting ribbons |
+| Two mediums | Gathering spell |
 | Short, short, short | Interactive red shots |
-| Short, short, medium | Unassigned |
+| Short, short, medium | American flag |
 | Short, medium, short | Unassigned |
 | Short, medium, medium | Unassigned |
 | Medium, short, short | Unassigned |
@@ -82,8 +116,15 @@ three-press sequences are currently unassigned and show the unset indicator:
 | Medium, medium, short | Unassigned |
 | Medium, medium, medium | Unassigned |
 
-Timings and slot assignments are in `wizard_staff/config.py` and
-`wizard_staff/controller.py`. Unset slots use a brief red indicator.
+All triggered patterns use a half-second fade-to-black handoff before returning
+to a base pattern. The handoff fades the last displayed frame, including the
+orb, without restarting launches. Effects that have already faded completely
+stay black rather than reviving an old frame. A new explicit input command or
+base selection interrupts the handoff; base patterns do not fade automatically.
+
+Button timings are in `wizard_staff/config.py`; slot assignments and optional
+pattern flags are in `wizard_staff/patterns.py`. New spell choreography and
+shared ember/mist/red palettes are in `wizard_staff/spell_effects.py`.
 Patterns b, c, and e can be extended by pressing and holding while they run.
 Releasing stops new launches and lets active vectors clear. Pattern e normally
 launches for three seconds.
@@ -114,22 +155,29 @@ python main.py --dry-run --seconds 10
 python main.py --dry-run --seconds 5 --effect quick
 python main.py --dry-run --virtual-button cycle
 python main.py --dry-run --virtual-button input
+python main.py --dry-run --effect gathering_spell --seconds 5
 python -m unittest discover -s tests -v
 ```
 
 `--virtual-button` replaces GPIO button input while keeping the normal gesture
-classifier. In `input` mode, type `1`, `2`, or `3` followed by Enter to select
-a base pattern, `a` through `g` to simulate a gesture, `s` to launch an
+classifier. In `input` mode, type `1`, `2`, `3`, or `4` followed by Enter to select
+a base pattern, `a` through `j` to simulate a gesture, `s` to launch an
 interactive shot, or `x` to simulate a long press and exit interactive mode.
 The input mode prints the complete pattern list and command options at startup.
 Type `q` to quit.
-Commands entered while a finite effect is running are queued; `s` and `x` can
-also be entered while interactive mode is active.
-Hold gestures stay active for about five seconds before release. A selected
+Input mode starts new gesture commands without waiting for an active effect to
+finish, and can interrupt a simulated hold. A numbered base selection switches
+immediately. Gesture commands still pass through the normal press durations,
+debounce, and multi-press window. Base patterns, including 4, do not wait for
+vectors to clear. `s` and `x` retain their interactive shot/exit behavior.
+Hold gestures stay active for about five seconds before release; f holds for
+six seconds to demonstrate drops continuing after the stacks fill. A selected
 base pattern resumes after a triggered effect.
 In `cycle` mode, the route includes `g` for interactive red shots after the
 existing `a` through `f` gestures and their base-pattern gaps. It demonstrates
-three shots at irregular intervals, then holds to exit and resumes the route.
+three shots at irregular intervals, then holds to exit and continues through
+`h` (twisting ribbons), `i` (gathering spell), and `j` (American flag),
+with their base-pattern gaps. Base gaps cycle through 1-4; g resumes base 1.
 Each base step lasts five seconds after its triggered effect finishes. The
 terminal display shows the route in order, highlights its active row, and
 updates a countdown in a fixed column. Interactive mode displays its tap/hold
@@ -138,13 +186,20 @@ the dry-run LED preview. Either mode can drive the real LEDs without a wired
 button by omitting `--dry-run`.
 
 The optional `downward_acceleration` value in `wizard_staff/patterns.py` is
-`low`, `med`, or `high`, meaning 2, 4, or 6 physical wraps/s². Omitting it (or
-setting it to `off`) preserves the original motion. Medium acceleration is
-enabled for the green spiral base pattern, and high acceleration for bouncing
-vectors; green channels and triggered patterns remain off unless their mapping
-is changed. Bouncing vectors launch before their orb's red flash, which begins
-100 ms later. Their upward travel fades steeply near the top. The optional
-`allow_reversal` mapping field defaults to true for upward motion.
+`low`, `med`, or `high`, meaning 6, 10, or 14 physical wraps/s^2. Omitted or
+`off` means no acceleration. Pattern a previously had acceleration disabled
+because its ring and red fill used separate trajectories. The red boundary now
+comes from the ring position, so a uses low acceleration while staying aligned.
+Bases 1 and 3 also use low acceleration. Pattern i uses `upward_acceleration` set
+to `high`; the shared motion helper represents upward acceleration as negative.
+The new spring base independently chooses low, medium, or high acceleration
+with the same sign as each vector's travel. Pattern e retains its original
+motion and two-pair-per-second launch cadence. Other mappings omit acceleration.
+The optional `allow_reversal` defaults to true for existing gravity effects.
+
+`StaffGeometry.spiral_channel(0..2)` returns the three sparse spring paths;
+`wizard_staff/spring_effects.py` generates their independent, reproducible
+launches and only evaluates a bounded history of potentially visible vectors.
 
 On the Raspberry Pi, connect the strip data line
 to the configured NeoPixel pin (default `D18`), and wire a normally-open
@@ -192,3 +247,6 @@ Use a suitable external LED power supply with a shared ground. `--brightness`
 is an additional NeoPixel output multiplier, defaulting to 1.0 so the pattern
 baseline and flash settings are applied as written.
 
+
+The American flag pattern is also available directly with `--effect american_flag`.
+Its stem is divided into three nearly equal LED bands; the orb stays red.
